@@ -334,7 +334,7 @@
     }
   }
 
-  function createFloatingPanel(panelId, contextSnippet, fullContextText) {
+  function createFloatingPanel(panelId, contextSnippet) {
     const panel = document.createElement('div');
     panel.className = 'claude-thread-panel';
     panel.dataset.panelId = panelId;
@@ -349,13 +349,6 @@
           <span>Thread ${panelId}</span>
         </div>
         <div class="thread-panel-actions">
-          <button class="thread-panel-btn thread-copy-hint" title="Context copied to clipboard">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-            </svg>
-            <span class="copy-hint-text">Paste context</span>
-          </button>
           <button class="thread-panel-btn thread-panel-minimize" title="Minimize thread">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -396,11 +389,6 @@
       closePanel(panelId);
     });
 
-    // Copy button - re-copy context to clipboard
-    panel.querySelector('.thread-copy-hint').addEventListener('click', () => {
-      copyContextToClipboard(fullContextText, panel);
-    });
-
     // Make panel width resizable by dragging its left edge
     makeResizable(panel, panel.querySelector('.thread-panel-resize-handle'));
 
@@ -420,7 +408,7 @@
     const isBlank = !contextText;
     const contextSnippet = isBlank ? 'Blank thread' : contextText.substring(0, 100);
 
-    const panel = createFloatingPanel(panelId, contextSnippet, contextText);
+    const panel = createFloatingPanel(panelId, contextSnippet);
 
     // Store panel data (including scroll origin for sticky threads)
     panels.set(panelId, {
