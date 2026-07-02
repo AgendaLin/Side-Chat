@@ -10,7 +10,7 @@
   // CONFIGURATION
   // ============================================
   const CONFIG = {
-    minSelectionLength: 10,
+    minSelectionLength: 1,   // any non-empty (trimmed) selection shows the Side Chat button
     panelWidth: 480,
     panelHeight: 600,
     panelMargin: 20
@@ -94,59 +94,20 @@
   }
 
   // ============================================
-  // REPLY BUTTON HIJACK
+  // SIDE CHAT SELECTION BUTTON
   // ============================================
-  function setupReplyButtonHijack() {
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType !== 1) continue;
+  // A small standalone button that appears next to any non-empty text
+  // selection. It never touches the platform's own selection toolbar
+  // (Claude's Reply button / ChatGPT's Ask ChatGPT button).
+  let sideChatButton = null;
+  let selectionDebounce = null;
 
-          // Check if the added node IS the tooltip or CONTAINS it
-          const tooltip = node.matches?.('[data-selection-tooltip="true"]')
-            ? node
-            : node.querySelector?.('[data-selection-tooltip="true"]');
+  function getSideChatButton() {
+    if (sideChatButton && sideChatButton.isConnected) return sideChatButton;
 
-          if (tooltip) {
-            hijackReplyButton(tooltip);
-          }
-        }
-      }
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-  }
-
-  function hijackReplyButton(tooltip) {
-    const button = tooltip.querySelector('button');
-    if (!button || button.dataset.tangentHijacked) return;
-
-    // Don't hijack if any expanded panel exists
-    for (const [, panelData] of panels) {
-      if (!panelData.minimized) return;
-    }
-
-    // Get current selection
-    const selection = window.getSelection();
-    const text = selection.toString().trim();
-    if (text.length < CONFIG.minSelectionLength) return;
-
-    // Capture selection state
-    selectedText = text;
-    if (selection.rangeCount > 0) {
-      const scrollContainer = getScrollContainer();
-      selectionScrollTop = scrollContainer ? scrollContainer.scrollTop : window.scrollY;
-      selectionOriginElements = getBlockElementsFromSelection(selection);
-    }
-
-    // Mark as hijacked
-    button.dataset.tangentHijacked = 'true';
-
-    // Replace button content with our branch icon + "Open Thread"
-    button.innerHTML = `
+    const btn = document.createElement('button');
+    btn.id = 'tangent-side-chat-button';
+    btn.innerHTML = `
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="7" cy="4" r="2.5" fill="currentColor" stroke="none"/>
         <line x1="7" y1="6.5" x2="7" y2="17.5"/>
@@ -154,113 +115,96 @@
         <path d="M7,12 C7,12 7,15 11,15 L17,15 L17,17.5"/>
         <circle cx="17" cy="20" r="2.5" fill="currentColor" stroke="none"/>
       </svg>
-      Open Thread
+      Side Chat
     `;
 
-    // Style the tooltip container with our amber theme
-    const container = tooltip.querySelector('div');
-    if (container) {
-      container.style.cssText = `
-        background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
-        border: none;
-      `;
-    }
-
-    // Override click handler
-    button.addEventListener('click', (e) => {
+    // Prevent the mousedown from collapsing the selection before click fires
+    btn.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      e.stopImmediatePropagation();
-      if (selectedText) {
-        showFloatingPanel(selectedText);
-      }
-    }, { capture: true });
-  }
-
-  // ============================================
-  // CHATGPT BUTTON HIJACK
-  // ============================================
-  function setupChatGPTButtonHijack() {
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType !== 1) continue;
-
-          // Check if the added node IS the button or CONTAINS it
-          const buttons = node.matches?.('button.btn-secondary')
-            ? [node]
-            : Array.from(node.querySelectorAll?.('button.btn-secondary') || []);
-
-          for (const button of buttons) {
-            if (button.textContent.includes('Ask ChatGPT')) {
-              hijackAskChatGPTButton(button);
-            }
-          }
-        }
-      }
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openSideChatFromSelection();
     });
+
+    document.body.appendChild(btn);
+    sideChatButton = btn;
+    return btn;
   }
 
-  function hijackAskChatGPTButton(button) {
-    if (button.dataset.tangentHijacked) return;
+  function hideSideChatButton() {
+    if (sideChatButton) sideChatButton.classList.remove('visible');
+  }
 
-    // Don't hijack if any expanded panel exists
-    for (const [, panelData] of panels) {
-      if (!panelData.minimized) return;
-    }
+  function isInsideTangentUI(node) {
+    const el = node && (node.nodeType === 1 ? node : node.parentElement);
+    return !!el?.closest('.claude-thread-panel, .thread-tabbar, #tangent-side-chat-button');
+  }
 
-    // Get current selection
+  function openSideChatFromSelection() {
     const selection = window.getSelection();
     const text = selection.toString().trim();
-    if (text.length < CONFIG.minSelectionLength) return;
+    hideSideChatButton();
+    if (!text) return;
 
-    // Capture selection state
     selectedText = text;
-    if (selection.rangeCount > 0) {
-      const scrollContainer = getScrollContainer();
-      selectionScrollTop = scrollContainer ? scrollContainer.scrollTop : window.scrollY;
-      selectionOriginElements = getBlockElementsFromSelection(selection);
+    const scrollContainer = getScrollContainer();
+    selectionScrollTop = scrollContainer ? scrollContainer.scrollTop : window.scrollY;
+    selectionOriginElements = getBlockElementsFromSelection(selection);
+
+    showFloatingPanel(text);
+  }
+
+  function updateSideChatButton() {
+    const selection = window.getSelection();
+    const text = selection ? selection.toString().trim() : '';
+
+    if (!text || text.length < CONFIG.minSelectionLength ||
+        !selection.rangeCount || isInsideTangentUI(selection.anchorNode)) {
+      hideSideChatButton();
+      return;
     }
 
-    // Mark as hijacked
-    button.dataset.tangentHijacked = 'true';
+    const range = selection.getRangeAt(0);
+    const rects = range.getClientRects();
+    const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+      hideSideChatButton();
+      return;
+    }
 
-    // Replace button content and style with amber theme
-    button.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="7" cy="4" r="2.5" fill="currentColor" stroke="none"/>
-        <line x1="7" y1="6.5" x2="7" y2="17.5"/>
-        <circle cx="7" cy="20" r="2.5" fill="currentColor" stroke="none"/>
-        <path d="M7,12 C7,12 7,15 11,15 L17,15 L17,17.5"/>
-        <circle cx="17" cy="20" r="2.5" fill="currentColor" stroke="none"/>
-      </svg>
-      Open Thread
-    `;
+    const btn = getSideChatButton();
+    btn.classList.add('visible');
 
-    button.style.cssText = `
-      background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
-    `;
+    // Place below the end of the selection; flip above if it would overflow.
+    // The vertical offset also keeps it clear of the platform's own selection
+    // toolbar, which appears directly above/at the selection.
+    const btnWidth = btn.offsetWidth || 110;
+    const btnHeight = btn.offsetHeight || 32;
+    let left = Math.min(rect.right + 6, window.innerWidth - btnWidth - 8);
+    let top = rect.bottom + 10;
+    if (top + btnHeight > window.innerHeight - 8) {
+      top = rect.top - btnHeight - 10;
+    }
+    btn.style.left = `${Math.max(8, left)}px`;
+    btn.style.top = `${Math.max(8, top)}px`;
+  }
 
-    // Override click handler
-    button.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      if (selectedText) {
-        showFloatingPanel(selectedText);
+  function setupSelectionButton() {
+    document.addEventListener('selectionchange', () => {
+      clearTimeout(selectionDebounce);
+      selectionDebounce = setTimeout(updateSideChatButton, 150);
+    });
+
+    // Keep the button anchored to the selection while the page scrolls
+    document.addEventListener('scroll', () => {
+      if (sideChatButton && sideChatButton.classList.contains('visible')) {
+        updateSideChatButton();
       }
-    }, { capture: true });
+    }, { capture: true, passive: true });
   }
 
   // ============================================
@@ -397,7 +341,8 @@
     panel.querySelector('.thread-panel-close').addEventListener('click', () => closePanel(panelId));
     panel.querySelector('.thread-panel-minimize').addEventListener('click', () => minimizePanel(panelId));
     panel.querySelector('.thread-open-tab').addEventListener('click', () => {
-      window.open('https://claude.ai/new', '_blank');
+      const fallbackUrl = PLATFORM === 'claude' ? 'https://claude.ai/new' : 'https://chatgpt.com/';
+      window.open(fallbackUrl, '_blank');
       closePanel(panelId);
     });
 
@@ -760,13 +705,6 @@ Context from my main thread:
   }
 
   // ============================================
-  // SELECTION HANDLING
-  // ============================================
-  // Note: Selection state is now primarily captured in hijackReplyButton()
-  // when Claude's native tooltip appears. This handler serves as a backup
-  // for keyboard shortcuts (Cmd+Shift+T) which don't trigger the tooltip.
-
-  // ============================================
   // KEYBOARD SHORTCUT
   // ============================================
   function handleKeydown(e) {
@@ -1098,12 +1036,9 @@ Context from my main thread:
       return;
     }
 
-    // Hijack the platform's native button with our Open Thread button
-    if (PLATFORM === 'claude') {
-      setupReplyButtonHijack();
-    } else {
-      setupChatGPTButtonHijack();
-    }
+    // Show our own Side Chat button on any non-empty selection.
+    // The platform's native selection toolbar is left untouched.
+    setupSelectionButton();
 
     document.addEventListener('keydown', handleKeydown);
 

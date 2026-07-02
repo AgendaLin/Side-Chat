@@ -3,9 +3,9 @@
  */
 
 /* ============================================
-   FLOATING BUTTON
+   SIDE CHAT SELECTION BUTTON
    ============================================ */
-#claude-thread-button {
+#tangent-side-chat-button {
   position: fixed;
   z-index: 2147483647;
   display: flex;
@@ -28,23 +28,23 @@
   pointer-events: none;
 }
 
-#claude-thread-button.visible {
+#tangent-side-chat-button.visible {
   opacity: 1;
   visibility: visible;
   transform: translateY(0) scale(1);
   pointer-events: auto;
 }
 
-#claude-thread-button:hover {
+#tangent-side-chat-button:hover {
   background: linear-gradient(135deg, #b45309 0%, #92400e 100%);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2), 0 3px 6px rgba(0, 0, 0, 0.12);
 }
 
-#claude-thread-button:active {
+#tangent-side-chat-button:active {
   transform: scale(0.97);
 }
 
-#claude-thread-button svg {
+#tangent-side-chat-button svg {
   flex-shrink: 0;
 }
 
