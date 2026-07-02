@@ -7,7 +7,34 @@
 Fork 自 cursed-github/tangent（MIT）。把原本「劫持平台原生選取按鈕」的設計，改成
 Codex 風格的獨立側邊聊天：自有 Side Chat 按鈕 + 右側停靠 panel + 主聊天縮寬。
 
-## 目前狀態：V2.0.0 完成
+## 目前狀態：V2.1.0 完成 — 每對話單一 side chat
+
+V2.1 把 thread 模型從「每次選取開新 thread」改成「**一個主對話綁一個 side chat**」：
+
+- 多 thread／黑色小卡 tab bar／Thread 編號全部移除
+- 同一主對話中再次選取 → context 附加進同一個 side 對話的輸入框（不自動送出）
+- 右緣把手三態：暗＝無 side chat（點開空白）；亮＋白點＝有（縮小中或可復原）；展開時隱藏
+- SPA 切換主對話會自動切換對應的 side chat（同頁 session 內各自保留）
+- 主對話 `/new` 送出第一則訊息取得正式 ID 時，side chat 綁定自動遷移
+- **持久化**：使用者在 side chat 裡關掉臨時模式 → 變成平台端正常對話 →
+  watcher 偵測 iframe URL 變成 `/c/<id>`（GPT）或 `/chat/<id>`（Claude）且非臨時參數
+  → 把「主對話 ID → side 對話 URL」寫進該網站 origin 的 localStorage
+  （key `tangent-side-chat-bindings`）→ 刷新後把手亮起，點擊即復原
+- 🗑 丟棄會同時清除綁定（平台端已存的對話不會被刪，要刪去側邊欄自己刪）
+
+兩平台均已實測：重用注入、把手三態、SPA 切換、刷新復原、🗑 清綁定。
+
+### V2.1 額外決策（含被否決方案）
+
+- **綁定存 localStorage 而非 chrome.storage**：manifest 新增 `storage` 權限後，
+  Extensions Reloader 的 reload 不會套用新權限（`chrome.storage` 維持 undefined，
+  需要去 chrome://extensions 按原生 Reload）。localStorage 免權限、同步、
+  且綁定本來就按平台隔離，語意剛好。代價：使用者清網站資料會失去綁定（可接受）。
+- **Claude 的 Exit incognito 會丟棄 incognito 對話**（實測確認，與 ChatGPT
+  「切換保留草稿」不同）。要持久化 Claude side chat：先退出 incognito 再開始聊。
+  README 已註明。
+
+## V2.0.0（已完成）
 
 branch `feature/side-chat`，所有目標行為已在 claude.ai 與 chatgpt.com 實測通過：
 

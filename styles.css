@@ -83,6 +83,23 @@ html.tangent-side-open #tangent-edge-handle {
   display: none;
 }
 
+/* A side chat exists for this conversation (minimized or restorable) */
+#tangent-edge-handle.has-thread {
+  opacity: 0.9;
+}
+
+#tangent-edge-handle.has-thread::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+}
+
 /* ============================================
    DOCKED SIDE PANEL
    ============================================ */
@@ -91,11 +108,6 @@ html.tangent-side-open #tangent-edge-handle {
    html/body margins with layered !important rules that beat extension
    stylesheets, and a CSS transition on <html> margin gets stuck at time 0
    on claude.ai, permanently freezing the value — so no transition here. */
-
-/* Keep minimized tabs visible to the left of the open dock */
-html.tangent-side-open .thread-tabbar {
-  right: calc(var(--tangent-panel-width, 480px) + 12px);
-}
 
 /* chatgpt.com sizes its app root with Tailwind's w-screen (100vw), which
    ignores the shrunken <html>/<body> and stays under the panel. Cap all
@@ -307,88 +319,6 @@ html.tangent-side-open .w-screen {
   color: #3b82f6;
 }
 
-/* ============================================
-   MINIMIZED TAB BAR
-   ============================================ */
-.thread-tabbar {
-  position: fixed;
-  right: 12px;
-  top: 80px;
-  z-index: 2147483645;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-}
-
-.thread-tabbar.visible {
-  opacity: 1;
-  visibility: visible;
-}
-
-.thread-tab {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  background: #262626;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  max-width: 200px;
-  cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-.thread-tab:hover {
-  background: #333333;
-  transform: translateX(-4px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-}
-
-.thread-tab-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
-
-.thread-tab-content svg {
-  flex-shrink: 0;
-  color: #d97706;
-}
-
-.thread-tab-text {
-  font-size: 12px;
-  color: #e5e5e5;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.thread-tab-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  color: #737373;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-  flex-shrink: 0;
-}
-
-.thread-tab-close:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-}
 
 /* ============================================
    THREAD HIGHLIGHT FLASH
@@ -447,14 +377,6 @@ html.tangent-side-open .w-screen {
   50%  { transform: translate(8px, 0); }
   75%  { transform: translate(0, -5px); }
   100% { transform: translate(-8px, 0); }
-}
-
-/* ============================================
-   THREAD BRANCH ICON (minimized tab)
-   ============================================ */
-.thread-branch-icon {
-  flex-shrink: 0;
-  filter: drop-shadow(0 0 4px rgba(217, 119, 6, 0.6));
 }
 
 /* ============================================

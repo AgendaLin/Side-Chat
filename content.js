@@ -1,6 +1,6 @@
 /**
- * Tangent – Threaded Chat for ChatGPT & Claude
- * Branch off into side threads without leaving your main conversation
+ * Tangent – Side Chat for ChatGPT & Claude
+ * One docked side conversation per main conversation.
  */
 
 (function() {
@@ -17,6 +17,9 @@
 
   const PLATFORM = window.location.hostname.includes('claude.ai') ? 'claude' : 'chatgpt';
 
+  const CONTEXT_HASH = '#tangent-side-chat';
+  const CONTEXT_STORAGE_KEY = 'tangent-side-chat-context';
+
   // ============================================
   // STATE
   // ============================================
@@ -26,11 +29,56 @@
   let selectionScrollTop = 0;
   let selectionOriginElements = []; // DOM references to block elements in selection
 
-  // Multi-panel state
-  let panelCounter = 0;
-  const panels = new Map(); // panelId -> { element, minimized, contextSnippet }
-  let minimizedTabBar = null;
-  let dockWidth = CONFIG.panelWidth; // current docked panel width, shared by all panels
+  // One side chat per main conversation, kept alive for the page session
+  const sessionPanels = new Map(); // convKey -> { element, minimized, originScrollTop, originSelectedText, originElements }
+  let currentConvKey = null;
+  let dockWidth = CONFIG.panelWidth;
+
+  // convKey -> side conversation URL, persisted in the site's localStorage.
+  // A binding only exists once the user turns off temporary mode inside the
+  // side chat, making it a real saved conversation on the platform.
+  const bindings = {};
+
+  // ============================================
+  // MAIN CONVERSATION KEY
+  // ============================================
+  function getConvKey() {
+    const path = location.pathname;
+    const m = PLATFORM === 'claude'
+      ? path.match(/^\/chat\/([\w-]+)/)
+      : path.match(/^\/c\/([\w-]+)/);
+    return m ? m[1] : 'new';
+  }
+
+  // Bindings live in the site origin's localStorage — no extension
+  // permission needed, and they are naturally scoped per platform.
+  const BINDINGS_KEY = 'tangent-side-chat-bindings';
+
+  function loadBindings() {
+    try {
+      Object.assign(bindings, JSON.parse(localStorage.getItem(BINDINGS_KEY) || '{}'));
+    } catch (e) { /* corrupted store — start fresh */ }
+  }
+
+  function persistBindings() {
+    try {
+      localStorage.setItem(BINDINGS_KEY, JSON.stringify(bindings));
+    } catch (e) {
+      console.log('Tangent: could not persist bindings:', e.message);
+    }
+  }
+
+  function saveBinding(convKey, url) {
+    if (convKey === 'new') return; // no stable identity to bind to
+    bindings[convKey] = url;
+    persistBindings();
+    console.log('Tangent: binding saved for', convKey, '->', url);
+  }
+
+  function removeBinding(convKey) {
+    delete bindings[convKey];
+    persistBindings();
+  }
 
   // ============================================
   // SELECTION ORIGIN CAPTURE
@@ -39,7 +87,6 @@
 
   function findNearestBlock(el) {
     if (!el) return null;
-    // Try standard block selectors first
     const block = el.closest(BLOCK_SELECTORS);
     if (block) return block;
     // Fallback: walk up and find first element with block-level display
@@ -72,12 +119,10 @@
 
     const endBlock = findNearestBlock(endEl);
 
-    // Single block selection
     if (!endBlock || startBlock === endBlock) {
       return [startBlock];
     }
 
-    // Multi-block: collect all blocks between start and end
     const ancestor = range.commonAncestorContainer;
     const ancestorEl = ancestor.nodeType === 1 ? ancestor : ancestor.parentElement;
     const allBlocks = ancestorEl.querySelectorAll(BLOCK_SELECTORS);
@@ -141,7 +186,7 @@
 
   function isInsideTangentUI(node) {
     const el = node && (node.nodeType === 1 ? node : node.parentElement);
-    return !!el?.closest('.claude-thread-panel, .thread-tabbar, #tangent-side-chat-button');
+    return !!el?.closest('.claude-thread-panel, #tangent-side-chat-button, #tangent-edge-handle');
   }
 
   function openSideChatFromSelection() {
@@ -155,7 +200,7 @@
     selectionScrollTop = scrollContainer ? scrollContainer.scrollTop : window.scrollY;
     selectionOriginElements = getBlockElementsFromSelection(selection);
 
-    showFloatingPanel(text);
+    openSidePanel(text);
   }
 
   function updateSideChatButton() {
@@ -196,8 +241,11 @@
   // ============================================
   // PERSISTENT EDGE HANDLE
   // ============================================
-  // Always-available launcher on the right edge: opens a blank side chat.
-  // Hidden via CSS while a panel is expanded (html.tangent-side-open).
+  // Always-available launcher on the right edge. Dim = no side chat for this
+  // conversation (click opens a blank one). Lit with a dot = a side chat is
+  // minimized or restorable (click brings it back).
+  let edgeHandle = null;
+
   function createEdgeHandle() {
     const handle = document.createElement('button');
     handle.id = 'tangent-edge-handle';
@@ -214,113 +262,28 @@
     handle.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      showFloatingPanel('');
+      openSidePanel('');
     });
     document.body.appendChild(handle);
+    edgeHandle = handle;
   }
 
-  function setupSelectionButton() {
-    document.addEventListener('selectionchange', () => {
-      clearTimeout(selectionDebounce);
-      selectionDebounce = setTimeout(updateSideChatButton, 150);
-    });
-
-    // Keep the button anchored to the selection while the page scrolls
-    document.addEventListener('scroll', () => {
-      if (sideChatButton && sideChatButton.classList.contains('visible')) {
-        updateSideChatButton();
-      }
-    }, { capture: true, passive: true });
+  function updateEdgeHandle() {
+    if (!edgeHandle) return;
+    const hasThread = sessionPanels.has(currentConvKey) || !!bindings[currentConvKey];
+    edgeHandle.classList.toggle('has-thread', hasThread);
+    edgeHandle.title = hasThread ? 'Reopen Side Chat' : 'Open Side Chat';
   }
 
   // ============================================
-  // MINIMIZED TAB BAR
+  // DOCKED SIDE PANEL
   // ============================================
-  function createMinimizedTabBar() {
-    const tabBar = document.createElement('div');
-    tabBar.id = 'claude-thread-tabbar';
-    tabBar.className = 'thread-tabbar';
-    document.body.appendChild(tabBar);
-    return tabBar;
-  }
-
-  function getOrCreateTabBar() {
-    if (!minimizedTabBar) {
-      minimizedTabBar = createMinimizedTabBar();
-    }
-    return minimizedTabBar;
-  }
-
-  function createMinimizedTab(panelId, contextSnippet) {
-    const tab = document.createElement('div');
-    tab.className = 'thread-tab';
-    tab.dataset.panelId = panelId;
-
-    // Truncate context for display
-    const displayText = contextSnippet.length > 30
-      ? contextSnippet.substring(0, 30) + '...'
-      : contextSnippet;
-
-    tab.innerHTML = `
-      <div class="thread-tab-content">
-        <svg class="thread-branch-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="7" cy="4" r="2.5" fill="#d97706" stroke="none"/>
-          <line x1="7" y1="6.5" x2="7" y2="17.5"/>
-          <circle cx="7" cy="20" r="2.5" fill="#d97706" stroke="none"/>
-          <path d="M7,12 C7,12 7,15 11,15 L17,15 L17,17.5"/>
-          <circle cx="17" cy="20" r="2.5" fill="#d97706" stroke="none"/>
-        </svg>
-        <span class="thread-tab-text" title="${contextSnippet}">${displayText}</span>
-      </div>
-      <button class="thread-tab-close" title="Discard thread">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-          <line x1="10" y1="11" x2="10" y2="17"></line>
-          <line x1="14" y1="11" x2="14" y2="17"></line>
-        </svg>
-      </button>
-    `;
-
-    // Click tab to expand
-    tab.querySelector('.thread-tab-content').addEventListener('click', () => {
-      expandPanel(panelId);
-    });
-
-    // Close button
-    tab.querySelector('.thread-tab-close').addEventListener('click', (e) => {
-      e.stopPropagation();
-      closePanel(panelId);
-    });
-
-    return tab;
-  }
-
-  function updateTabBar() {
-    const tabBar = getOrCreateTabBar();
-    tabBar.innerHTML = '';
-
-    for (const [panelId, panelData] of panels) {
-      if (panelData.minimized) {
-        const tab = createMinimizedTab(panelId, panelData.contextSnippet);
-        tabBar.appendChild(tab);
-      }
-    }
-
-    // Show/hide tabbar based on whether there are minimized tabs
-    const hasMinimizedTabs = Array.from(panels.values()).some(p => p.minimized);
-    tabBar.classList.toggle('visible', hasMinimizedTabs);
-  }
-
-  // ============================================
-  // DOCKED SIDE PANEL WITH IFRAME
-  // ============================================
-  // The panel docks to the right edge of the viewport. While a panel is
-  // expanded, <html> gets the `tangent-side-open` class which shrinks the
-  // main chat (body margin-right) instead of covering it.
+  // The panel docks to the right edge of the viewport. While it is expanded,
+  // <html> gets the `tangent-side-open` class and an inline margin that
+  // shrinks the main chat instead of covering it.
   function updateDockState() {
-    const hasExpanded = Array.from(panels.values()).some(p => !p.minimized);
+    const data = sessionPanels.get(currentConvKey);
+    const hasExpanded = !!data && !data.minimized;
     const html = document.documentElement;
     html.style.setProperty('--tangent-panel-width', `${dockWidth}px`);
     html.classList.toggle('tangent-side-open', hasExpanded);
@@ -334,10 +297,10 @@
     }
   }
 
-  function createFloatingPanel(panelId, contextSnippet) {
+  function createPanelData(convKey, iframeSrc) {
     const panel = document.createElement('div');
     panel.className = 'claude-thread-panel';
-    panel.dataset.panelId = panelId;
+    panel.dataset.convKey = convKey;
 
     panel.innerHTML = `
       <div class="thread-panel-header">
@@ -346,7 +309,7 @@
             <div class="orbit-dot orbit-dot-1"></div>
             <div class="orbit-dot orbit-dot-2"></div>
           </div>
-          <span>Thread ${panelId}</span>
+          <span>Side Chat</span>
         </div>
         <div class="thread-panel-actions">
           <button class="thread-panel-btn thread-panel-minimize" title="Minimize thread">
@@ -372,7 +335,7 @@
           <span>Loading thread...</span>
         </div>
         <div class="thread-panel-error" style="display: none;">
-          <p>Unable to load Claude in iframe.</p>
+          <p>Unable to load the side chat in an iframe.</p>
           <p>This may be due to security restrictions.</p>
           <button class="thread-open-tab">Open in new tab instead</button>
         </div>
@@ -380,89 +343,33 @@
       <div class="thread-panel-resize-handle"></div>
     `;
 
-    // Event listeners
-    panel.querySelector('.thread-panel-close').addEventListener('click', () => closePanel(panelId));
-    panel.querySelector('.thread-panel-minimize').addEventListener('click', () => minimizePanel(panelId));
+    panel.querySelector('.thread-panel-close').addEventListener('click', () => discardPanel(convKey));
+    panel.querySelector('.thread-panel-minimize').addEventListener('click', () => minimizePanel(convKey));
     panel.querySelector('.thread-open-tab').addEventListener('click', () => {
       const fallbackUrl = PLATFORM === 'claude' ? 'https://claude.ai/new' : 'https://chatgpt.com/';
       window.open(fallbackUrl, '_blank');
-      closePanel(panelId);
+      discardPanel(convKey);
     });
 
-    // Make panel width resizable by dragging its left edge
     makeResizable(panel, panel.querySelector('.thread-panel-resize-handle'));
-
     document.body.appendChild(panel);
-    return panel;
-  }
-
-  function showFloatingPanel(contextText) {
-    // Only one panel is expanded in the dock at a time; minimize the rest
-    for (const [panelId, panelData] of panels) {
-      if (!panelData.minimized) minimizePanel(panelId);
-    }
-
-    // Create new panel
-    panelCounter++;
-    const panelId = panelCounter;
-    const isBlank = !contextText;
-    const contextSnippet = isBlank ? 'Blank thread' : contextText.substring(0, 100);
-
-    const panel = createFloatingPanel(panelId, contextSnippet);
-
-    // Store panel data (including scroll origin for sticky threads)
-    panels.set(panelId, {
-      element: panel,
-      minimized: false,
-      contextSnippet: contextSnippet,
-      fullContext: contextText,
-      originScrollTop: isBlank ? 0 : selectionScrollTop,
-      originSelectedText: contextText,
-      originElements: isBlank ? [] : [...selectionOriginElements]
-    });
 
     const iframe = panel.querySelector('.thread-iframe');
     const loading = panel.querySelector('.thread-panel-loading');
     const error = panel.querySelector('.thread-panel-error');
 
-    // Reset state
     loading.style.display = 'flex';
     error.style.display = 'none';
     iframe.style.display = 'none';
 
-    // Dock the panel on the right and shrink the main chat
-    panel.classList.add('visible');
-    updateDockState();
-
-    // Clear selection (also dismisses Claude's tooltip)
-    window.getSelection().removeAllRanges();
-
-    // Copy context to clipboard (skip for blank threads)
-    if (!isBlank) {
-      copyContextToClipboard(contextText, panel);
-    }
-
-    // Load Claude in iframe
     iframe.onload = () => {
       loading.style.display = 'none';
       iframe.style.display = 'block';
     };
-
     iframe.onerror = () => {
       loading.style.display = 'none';
       error.style.display = 'flex';
     };
-
-    // Store context in sessionStorage for the iframe to read (skip for blank threads)
-    if (!isBlank) {
-      const contextKey = `claude-thread-opener-context-${panelId}`;
-      sessionStorage.setItem(contextKey, contextText);
-    }
-
-    // Set iframe src with incognito/temp-chat param and panel ID in hash
-    const iframeSrc = PLATFORM === 'claude'
-      ? `https://claude.ai/new?incognito=true#thread-opener-${panelId}`
-      : `https://chatgpt.com/?temporary-chat=true#thread-opener-${panelId}`;
     iframe.src = iframeSrc;
 
     // Fallback: if iframe doesn't load in 5 seconds, show error
@@ -480,72 +387,242 @@
       }
     }, 5000);
 
-    return panelId;
+    const data = {
+      element: panel,
+      minimized: false,
+      originScrollTop: selectionScrollTop,
+      originSelectedText: selectedText,
+      originElements: [...selectionOriginElements]
+    };
+    sessionPanels.set(convKey, data);
+    return data;
   }
 
-  function minimizePanel(panelId) {
-    const panelData = panels.get(panelId);
-    if (!panelData) return;
+  // Open (or reveal) the side chat for the current conversation.
+  // contextText '' means blank — no context injection.
+  function openSidePanel(contextText) {
+    const convKey = currentConvKey;
+    let data = sessionPanels.get(convKey);
 
-    panelData.minimized = true;
-    panelData.element.classList.remove('visible');
-
-    updateTabBar();
-    updateDockState();
-  }
-
-  function expandPanel(panelId) {
-    const panelData = panels.get(panelId);
-    if (!panelData) return;
-
-    // Only one expanded panel in the dock at a time
-    for (const [otherId, otherData] of panels) {
-      if (otherId !== panelId && !otherData.minimized) minimizePanel(otherId);
+    if (data) {
+      // Reuse the live panel; append the new context into its input
+      if (contextText) {
+        data.originSelectedText = contextText;
+        data.originScrollTop = selectionScrollTop;
+        data.originElements = [...selectionOriginElements];
+        injectContext(data.element, contextText);
+        copyContextToClipboard(contextText);
+      }
+      expandPanel(convKey);
+      window.getSelection().removeAllRanges();
+      return;
     }
 
-    panelData.minimized = false;
-    panelData.element.classList.add('visible');
+    const storedUrl = bindings[convKey];
+    if (storedUrl) {
+      // Restore the bound (saved) side conversation
+      data = createPanelData(convKey, storedUrl);
+      if (contextText) {
+        injectContext(data.element, contextText);
+        copyContextToClipboard(contextText);
+      }
+      expandPanel(convKey);
+      window.getSelection().removeAllRanges();
+      return;
+    }
 
-    updateTabBar();
-    updateDockState();
-
-    // Scroll to origin and highlight the selected text
-    scrollToOriginAndHighlight(panelData);
+    // Fresh temporary side chat. Context travels via sessionStorage + URL
+    // hash so the iframe-side script can paste it once the input exists.
+    if (contextText) {
+      sessionStorage.setItem(CONTEXT_STORAGE_KEY, contextText);
+      copyContextToClipboard(contextText);
+    }
+    const src = PLATFORM === 'claude'
+      ? `https://claude.ai/new?incognito=true${contextText ? CONTEXT_HASH : ''}`
+      : `https://chatgpt.com/?temporary-chat=true${contextText ? CONTEXT_HASH : ''}`;
+    createPanelData(convKey, src);
+    expandPanel(convKey);
+    window.getSelection().removeAllRanges();
   }
 
-  function scrollToOriginAndHighlight(panelData) {
-    const elements = panelData.originElements;
+  function expandPanel(convKey) {
+    const data = sessionPanels.get(convKey);
+    if (!data) return;
 
-    // Primary path: use stored DOM references
+    const wasMinimized = data.minimized;
+    data.minimized = false;
+    data.element.classList.add('visible');
+
+    updateDockState();
+    updateEdgeHandle();
+
+    // Restoring a minimized side chat scrolls back to where it branched off
+    if (wasMinimized) scrollToOriginAndHighlight(data);
+  }
+
+  function minimizePanel(convKey) {
+    const data = sessionPanels.get(convKey);
+    if (!data) return;
+
+    data.minimized = true;
+    data.element.classList.remove('visible');
+
+    updateDockState();
+    updateEdgeHandle();
+  }
+
+  function discardPanel(convKey) {
+    const data = sessionPanels.get(convKey);
+    if (data) {
+      data.element.querySelector('.thread-iframe').src = 'about:blank';
+      data.element.remove();
+      sessionPanels.delete(convKey);
+    }
+    removeBinding(convKey);
+    sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
+
+    updateDockState();
+    updateEdgeHandle();
+  }
+
+  // ============================================
+  // CONTEXT INJECTION (parent side, into live iframe)
+  // ============================================
+  function injectContext(panelElement, text) {
+    const iframe = panelElement.querySelector('.thread-iframe');
+    const formatted = `---\nContext from my main thread:\n"${text}"\n---\n\n`;
+    const deadline = Date.now() + 10000;
+
+    const timer = setInterval(() => {
+      let doc = null;
+      try { doc = iframe.contentDocument; } catch (e) { /* not ready */ }
+
+      if (doc) {
+        const input = doc.querySelector('[data-testid="chat-input"]')
+          || doc.querySelector('.ProseMirror[contenteditable="true"]')
+          || doc.querySelector('#prompt-textarea');
+        if (input) {
+          try {
+            const target = input.querySelector('p') || input;
+            target.appendChild(doc.createTextNode(formatted));
+            target.classList.remove('is-empty', 'is-editor-empty');
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.focus();
+          } catch (e) {
+            console.error('Tangent: context injection failed', e);
+          }
+          clearInterval(timer);
+          return;
+        }
+      }
+
+      if (Date.now() > deadline) clearInterval(timer);
+    }, 400);
+  }
+
+  // ============================================
+  // CONVERSATION SWITCHING (SPA navigation)
+  // ============================================
+  function onConvChanged(newKey) {
+    const oldKey = currentConvKey;
+    const oldData = sessionPanels.get(oldKey);
+
+    // A fresh chat gains its real id after the first message; carry the
+    // side chat over instead of treating it as a different conversation.
+    if (oldKey === 'new' && newKey !== 'new' &&
+        oldData && !sessionPanels.has(newKey)) {
+      sessionPanels.delete('new');
+      sessionPanels.set(newKey, oldData);
+      oldData.element.dataset.convKey = newKey;
+      currentConvKey = newKey;
+      updateDockState();
+      updateEdgeHandle();
+      return;
+    }
+
+    if (oldData) oldData.element.classList.remove('visible');
+
+    currentConvKey = newKey;
+
+    const newData = sessionPanels.get(newKey);
+    if (newData && !newData.minimized) newData.element.classList.add('visible');
+
+    updateDockState();
+    updateEdgeHandle();
+  }
+
+  function watchConversation() {
+    setInterval(() => {
+      const key = getConvKey();
+      if (key !== currentConvKey) onConvChanged(key);
+    }, 800);
+  }
+
+  // ============================================
+  // SIDE CONVERSATION URL TRACKING (persistence)
+  // ============================================
+  // When the user turns off temporary mode inside the side chat, the iframe
+  // navigates to a real conversation URL. Remember it so the side chat can
+  // be restored for this main conversation after a reload.
+  function watchSideConversationUrl() {
+    setInterval(() => {
+      for (const [convKey, data] of sessionPanels) {
+        if (convKey === 'new') continue;
+        let href = null;
+        try { href = data.element.querySelector('.thread-iframe').contentWindow.location.href; } catch (e) { continue; }
+        if (!href) continue;
+
+        let url;
+        try { url = new URL(href); } catch (e) { continue; }
+
+        const isConversation = PLATFORM === 'claude'
+          ? /^\/chat\/[\w-]+/.test(url.pathname)
+          : /^\/c\/[\w-]+/.test(url.pathname);
+        const isTemporary = PLATFORM === 'claude'
+          ? url.searchParams.get('incognito') === 'true'
+          : url.searchParams.get('temporary-chat') === 'true';
+
+        if (isConversation && !isTemporary) {
+          const cleanUrl = url.origin + url.pathname;
+          if (bindings[convKey] !== cleanUrl) {
+            saveBinding(convKey, cleanUrl);
+            updateEdgeHandle();
+          }
+        }
+      }
+    }, 2000);
+  }
+
+  // ============================================
+  // SCROLL-BACK HIGHLIGHT
+  // ============================================
+  function scrollToOriginAndHighlight(data) {
+    const elements = data.originElements;
+
     if (elements.length > 0 && elements[0].isConnected) {
       flashHighlight(elements);
       return;
     }
 
-    // Fallback: text-based search (DOM references stale or missing)
-    const fallbackElements = findElementsByText(panelData.originSelectedText);
+    const fallbackElements = findElementsByText(data.originSelectedText);
     if (fallbackElements.length > 0) {
       flashHighlight(fallbackElements);
       return;
     }
 
-    // Last resort: scroll to saved position
     const scrollContainer = getScrollContainer();
     if (scrollContainer) {
       const offset = scrollContainer.clientHeight / 3;
-      const targetScroll = Math.max(0, panelData.originScrollTop - offset);
+      const targetScroll = Math.max(0, data.originScrollTop - offset);
       scrollContainer.scrollTo({ top: targetScroll, behavior: 'smooth' });
     }
   }
 
   function flashHighlight(elements) {
-    // Scroll first element into view
     elements[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    // Apply highlight
     elements.forEach(el => el.classList.add('thread-highlight-flash'));
 
-    // Fade out and clean up
     setTimeout(() => {
       elements.forEach(el => el.classList.add('fade-out'));
     }, 800);
@@ -574,7 +651,7 @@
 
       while (walker.nextNode()) {
         const node = walker.currentNode;
-        if (node.parentElement?.closest('.claude-thread-panel, .thread-tabbar')) {
+        if (node.parentElement?.closest('.claude-thread-panel')) {
           continue;
         }
         if (node.textContent.indexOf(searchStr) !== -1) {
@@ -590,38 +667,10 @@
     return highlights;
   }
 
-  function closePanel(panelId) {
-    const panelData = panels.get(panelId);
-    if (!panelData) return;
-
-    // Clean up iframe
-    const iframe = panelData.element.querySelector('.thread-iframe');
-    iframe.src = 'about:blank';
-
-    // Clean up sessionStorage (in case context wasn't consumed)
-    const contextKey = `claude-thread-opener-context-${panelId}`;
-    sessionStorage.removeItem(contextKey);
-
-    // Remove from DOM
-    panelData.element.remove();
-
-    // Remove from state
-    panels.delete(panelId);
-
-    updateTabBar();
-    updateDockState();
-  }
-
-  function closeAllPanels() {
-    for (const [panelId] of panels) {
-      closePanel(panelId);
-    }
-  }
-
   // ============================================
   // CLIPBOARD
   // ============================================
-  function copyContextToClipboard(text, panel) {
+  function copyContextToClipboard(text) {
     const template = `---
 Context from my main thread:
 "${text}"
@@ -629,15 +678,8 @@ Context from my main thread:
 
 `;
 
-    navigator.clipboard.writeText(template).then(() => {
-      // Flash the copy hint
-      const hint = panel.querySelector('.thread-copy-hint');
-      if (hint) {
-        hint.classList.add('flash');
-        setTimeout(() => hint.classList.remove('flash'), 1500);
-      }
-    }).catch(() => {
-      // Silently ignore — clipboard API fails when document lacks focus (e.g. extension reload)
+    navigator.clipboard.writeText(template).catch(() => {
+      // Silently ignore — clipboard API fails when document lacks focus
     });
   }
 
@@ -677,12 +719,10 @@ Context from my main thread:
   // SCROLL CONTAINER
   // ============================================
   function getScrollContainer() {
-    // Try Claude's main scrollable element
     const scrollEl = document.querySelector('[class*="scroll"]');
     if (scrollEl && scrollEl.scrollHeight > scrollEl.clientHeight) {
       return scrollEl;
     }
-    // Walk up from the current selection to find nearest scrollable ancestor
     const selection = window.getSelection();
     if (selection.rangeCount > 0) {
       let node = selection.getRangeAt(0).commonAncestorContainer;
@@ -704,7 +744,7 @@ Context from my main thread:
   // KEYBOARD SHORTCUT
   // ============================================
   function handleKeydown(e) {
-    // Cmd/Ctrl + Shift + T to open thread
+    // Cmd/Ctrl + Shift + T to open side chat from selection
     if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 't') {
       const selection = window.getSelection();
       const text = selection.toString().trim();
@@ -715,59 +755,42 @@ Context from my main thread:
         selectionOriginElements = getBlockElementsFromSelection(selection);
         const scrollContainer = getScrollContainer();
         selectionScrollTop = scrollContainer ? scrollContainer.scrollTop : window.scrollY;
-        showFloatingPanel(selectedText);
+        openSidePanel(text);
       }
     }
 
-    // Cmd+\ to open a blank thread
+    // Cmd+\ to open a blank side chat
     if (e.key === '\\' && e.metaKey && !e.shiftKey && !e.altKey) {
       e.preventDefault();
-      showFloatingPanel('');
+      openSidePanel('');
     }
 
-    // Escape to minimize the most recently opened visible panel
+    // Escape to minimize the expanded panel
     if (e.key === 'Escape') {
-      // Find visible (non-minimized) panels and minimize the last one
-      let lastVisiblePanelId = null;
-      for (const [panelId, panelData] of panels) {
-        if (!panelData.minimized) {
-          lastVisiblePanelId = panelId;
-        }
-      }
-      if (lastVisiblePanelId !== null) {
-        minimizePanel(lastVisiblePanelId);
+      const data = sessionPanels.get(currentConvKey);
+      if (data && !data.minimized) {
+        minimizePanel(currentConvKey);
       }
     }
   }
 
   // ============================================
-  // AUTO-PASTE CONTEXT (for iframe)
+  // AUTO-PASTE CONTEXT (runs inside the side chat iframe)
   // ============================================
   function autoPasteContext() {
-    // Check if we're in a thread-opener iframe by looking at the URL hash
-    const hash = window.location.hash;
-    const match = hash.match(/^#thread-opener-(\d+)$/);
-
-    if (!match) {
-      console.log('Tangent: No context hash found, skipping auto-paste');
+    if (window.location.hash !== CONTEXT_HASH) {
       return;
     }
 
-    const panelId = match[1];
-    const contextKey = `claude-thread-opener-context-${panelId}`;
-    const contextText = sessionStorage.getItem(contextKey);
-
+    const contextText = sessionStorage.getItem(CONTEXT_STORAGE_KEY);
     if (!contextText) {
-      console.log('Tangent: No context found in sessionStorage');
+      console.log('Tangent: no context found in sessionStorage');
       return;
     }
 
     // Clear the stored context to prevent reuse
-    sessionStorage.removeItem(contextKey);
+    sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
 
-    console.log('Tangent: Found context, will auto-paste');
-
-    // Format the context
     const formattedContext = `---\nContext from my main thread:\n"${contextText}"\n---\n\n`;
 
     let hasInserted = false;
@@ -777,37 +800,26 @@ Context from my main thread:
     function findAndFillInput() {
       if (hasInserted) return true;
 
-      // Strategy 1: Find by data-testid (most reliable for Claude)
       let inputElement = document.querySelector('[data-testid="chat-input"]');
 
-      // Strategy 2: Find TipTap/ProseMirror editor
       if (!inputElement) {
         inputElement = document.querySelector('.tiptap.ProseMirror[contenteditable="true"]');
       }
-
-      // Strategy 3: Find any ProseMirror editor
       if (!inputElement) {
         inputElement = document.querySelector('.ProseMirror[contenteditable="true"]');
       }
-
-      // Strategy 4: Find contenteditable with aria-label
       if (!inputElement) {
         inputElement = document.querySelector('[contenteditable="true"][aria-label*="prompt"]');
       }
-
-      // Strategy 5: ChatGPT's prompt textarea
       if (!inputElement) {
         inputElement = document.querySelector('#prompt-textarea');
       }
 
       if (inputElement) {
-        console.log('Tangent: Found input element', inputElement.className);
-
         try {
-          // Focus the editor first
           inputElement.focus();
 
-          // Clear existing content - for TipTap/ProseMirror, we need to clear the inner paragraph
+          // Clear existing content - for TipTap/ProseMirror, clear the inner paragraph
           const existingParagraph = inputElement.querySelector('p');
           if (existingParagraph) {
             existingParagraph.innerHTML = '';
@@ -815,32 +827,23 @@ Context from my main thread:
             inputElement.innerHTML = '<p></p>';
           }
 
-          // Get the paragraph to insert into
           const targetP = inputElement.querySelector('p') || inputElement;
-
-          // Create a text node with our content
-          const textNode = document.createTextNode(formattedContext);
-          targetP.appendChild(textNode);
-
-          // Remove empty classes if present
+          targetP.appendChild(document.createTextNode(formattedContext));
           targetP.classList.remove('is-empty', 'is-editor-empty');
 
-          // Dispatch input event to notify TipTap/React of the change
           inputElement.dispatchEvent(new InputEvent('input', {
             bubbles: true,
             cancelable: true,
             inputType: 'insertText',
             data: formattedContext
           }));
-
-          // Also try a generic input event
           inputElement.dispatchEvent(new Event('input', { bubbles: true }));
 
           // Move cursor to end
           const selection = window.getSelection();
           const range = document.createRange();
           range.selectNodeContents(targetP);
-          range.collapse(false); // collapse to end
+          range.collapse(false);
           selection.removeAllRanges();
           selection.addRange(range);
 
@@ -850,23 +853,21 @@ Context from my main thread:
             observer = null;
           }
 
-          console.log('Tangent: Auto-pasted context successfully');
+          console.log('Tangent: auto-pasted context');
           return true;
 
         } catch (err) {
-          console.error('Tangent: Error inserting text', err);
+          console.error('Tangent: error inserting text', err);
         }
       }
 
       return false;
     }
 
-    // Try immediately
     if (findAndFillInput()) {
       return;
     }
 
-    // Use MutationObserver to wait for input to appear
     observer = new MutationObserver(() => {
       findAndFillInput();
     });
@@ -876,125 +877,24 @@ Context from my main thread:
       subtree: true
     });
 
-    // Safety timeout
     setTimeout(() => {
-      if (!hasInserted) {
-        console.log('Tangent: Timeout waiting for input element');
-        if (observer) {
-          observer.disconnect();
-          observer = null;
-        }
+      if (!hasInserted && observer) {
+        observer.disconnect();
+        observer = null;
       }
     }, timeoutMs);
-
-    console.log('Tangent: Watching for input element...');
   }
 
   // ============================================
-  // TEMPORARY CHAT AUTO-ENABLE (for iframe)
-  // ============================================
-  function enableTemporaryChat() {
-    console.log('Tangent: Setting up temporary chat auto-enable');
-
-    let hasEnabled = false;
-    let observer = null;
-    const timeoutMs = 10000; // 10 second max wait
-
-    function findAndClickIncognitoButton() {
-      if (hasEnabled) return true;
-
-      // Strategy 1: Find the fixed top-right container with the incognito button
-      let toggleContainer = null;
-      let toggleButton = null;
-
-      const fixedContainers = document.querySelectorAll('div.fixed.right-3');
-      for (const container of fixedContainers) {
-        const stateWrapper = container.querySelector('[data-state]');
-        if (stateWrapper) {
-          toggleContainer = stateWrapper;
-          toggleButton = stateWrapper.querySelector('button');
-          break;
-        }
-      }
-
-      // Strategy 2: Find any div with data-state containing a button with ghost icon
-      if (!toggleButton) {
-        const stateWrappers = document.querySelectorAll('[data-state]');
-        for (const wrapper of stateWrappers) {
-          const btn = wrapper.querySelector('button');
-          if (btn) {
-            const svg = btn.querySelector('svg');
-            if (svg && svg.innerHTML.includes('look-around')) {
-              toggleContainer = wrapper;
-              toggleButton = btn;
-              break;
-            }
-          }
-        }
-      }
-
-      if (toggleButton && toggleContainer) {
-        const currentState = toggleContainer.getAttribute('data-state');
-
-        if (currentState === 'closed') {
-          toggleButton.click();
-          console.log('Tangent: Enabled temporary chat');
-        } else {
-          console.log('Tangent: Temporary chat already enabled (state:', currentState, ')');
-        }
-
-        hasEnabled = true;
-        if (observer) {
-          observer.disconnect();
-          observer = null;
-        }
-        return true;
-      }
-
-      return false;
-    }
-
-    // Try immediately in case DOM is already ready
-    if (findAndClickIncognitoButton()) {
-      return;
-    }
-
-    // Use MutationObserver to watch for the button to appear
-    observer = new MutationObserver(() => {
-      findAndClickIncognitoButton();
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
-    // Safety timeout - stop observing after max wait time
-    setTimeout(() => {
-      if (!hasEnabled) {
-        console.log('Tangent: Timeout waiting for incognito button');
-        if (observer) {
-          observer.disconnect();
-          observer = null;
-        }
-      }
-    }, timeoutMs);
-
-    console.log('Tangent: Watching for incognito button...');
-  }
-
-  // ============================================
-  // ENTER TO SEND FIX (for iframe)
+  // ENTER TO SEND FIX (runs inside the side chat iframe)
   // ============================================
   function fixEnterToSend() {
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
 
-      // Only act when focus is inside the chat input
       const active = document.activeElement;
       if (!active || !active.closest('[contenteditable="true"], textarea')) return;
 
-      // Find the send button
       const sendBtn =
         document.querySelector('button[aria-label="Send Message"]') ||      // Claude
         document.querySelector('button[aria-label*="Send"]') ||             // Claude fallback
@@ -1008,43 +908,51 @@ Context from my main thread:
         sendBtn.click();
       }
     }, { capture: true });
+  }
 
-    console.log('Tangent: Enter-to-send fix installed');
+  // ============================================
+  // SELECTION BUTTON WIRING
+  // ============================================
+  function setupSelectionButton() {
+    document.addEventListener('selectionchange', () => {
+      clearTimeout(selectionDebounce);
+      selectionDebounce = setTimeout(updateSideChatButton, 150);
+    });
+
+    // Keep the button anchored to the selection while the page scrolls
+    document.addEventListener('scroll', () => {
+      if (sideChatButton && sideChatButton.classList.contains('visible')) {
+        updateSideChatButton();
+      }
+    }, { capture: true, passive: true });
   }
 
   // ============================================
   // INITIALIZATION
   // ============================================
   function init() {
-    // If we're inside an iframe (the thread panel), handle iframe-specific features
+    // If we're inside an iframe (the side chat), handle iframe-specific features
     if (window.self !== window.top) {
-      console.log('Tangent: Running inside iframe');
-
-      // Incognito toggle: relying on ?incognito=true URL param instead
-      // enableTemporaryChat();
-
-      // Auto-paste the context from the parent page
+      console.log('Tangent: running inside iframe');
       autoPasteContext();
-
-      // Fix Enter key to send message (iframe may not bind Enter→submit properly)
       fixEnterToSend();
-
       return;
     }
 
-    // Show our own Side Chat button on any non-empty selection.
-    // The platform's native selection toolbar is left untouched.
-    setupSelectionButton();
+    currentConvKey = getConvKey();
+    loadBindings();
 
-    // Always-available launcher for a blank side chat
+    setupSelectionButton();
     createEdgeHandle();
+    updateEdgeHandle();
+    watchConversation();
+    watchSideConversationUrl();
 
     document.addEventListener('keydown', handleKeydown);
 
     console.log('Tangent initialized on', PLATFORM);
   }
 
-  // Wait for DOM to be ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

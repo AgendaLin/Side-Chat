@@ -8,14 +8,30 @@ thread panel docks to the right edge instead of floating over the page.
 
 ## How It Works
 
+Each main conversation has **one** side chat.
+
 1. **Select any text** in a Claude or ChatGPT conversation — even a single character
-2. **Click the "Side Chat" button** that appears next to your selection
+2. **Click the "Side Chat" button** that appears next to your selection (or click the amber
+   handle on the right edge for a blank side chat)
 3. **A docked panel opens on the right** with a fresh temporary/incognito chat; the main chat
    shrinks to make room instead of being covered
-4. **Your selected context is auto-pasted** into the side chat input (and copied to the clipboard
-   as a fallback)
-5. **Minimize threads to tabs**, restore them later — the side conversation stays alive for the
-   whole page session, and restoring scrolls you back to where you branched off
+4. **Your selected context is auto-pasted** into the side chat input; selecting more text later
+   appends the new context into the *same* side conversation
+5. **Minimize** (－/Escape) keeps the side chat alive for the page session — the edge handle
+   lights up with a dot; click it to bring the conversation back, scrolled to where you
+   branched off. **Discard** (🗑) destroys it.
+
+### Keeping a side chat across reloads
+
+Side chats are temporary by default and vanish on reload. To keep one: turn off
+temporary/incognito mode *inside* the side chat using the platform's own toggle. Once it becomes
+a real saved conversation, Tangent remembers the main-conversation → side-conversation binding
+(in the site's localStorage) and the edge handle restores it next time you open that main
+conversation — across reloads and browser restarts.
+
+- **ChatGPT**: toggle temporary chat off any time; the drafted input survives the switch.
+- **Claude**: "Exit incognito" *discards* the incognito conversation (platform behavior), so
+  exit incognito **before** you start chatting if you want the side chat to persist.
 
 ```
 關閉側欄時:
@@ -44,11 +60,13 @@ thread panel docks to the right edge instead of floating over the page.
 ## Features
 
 - Works on **claude.ai** and **chatgpt.com**
-- **Multiple threads** — the dock shows one expanded thread; others wait in the minimized tab bar
-- **Temporary by default** — side chats run in incognito / temporary-chat mode, no sidebar clutter
-- **Session persistence** — minimized threads keep their iframe alive; conversations survive
-  minimize/restore for the lifetime of the page
-- **Visual scroll-back** — restoring a thread highlights the text you branched from
+- **One side chat per conversation** — every selection feeds the same side conversation instead
+  of spawning new threads; switching main conversations switches the side chat with it
+- **Temporary by default** — side chats run in incognito / temporary-chat mode, no sidebar
+  clutter; opt into persistence per side chat via the platform's own temporary-mode toggle
+- **Session persistence** — minimized side chats keep their iframe alive; saved side chats are
+  restorable across reloads via the edge handle
+- **Visual scroll-back** — restoring a minimized side chat highlights the text you branched from
 - Runs entirely locally, no backend, no API key, no data collection; uses your existing login
 
 ## Keyboard shortcuts
