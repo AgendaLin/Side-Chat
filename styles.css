@@ -49,6 +49,41 @@
 }
 
 /* ============================================
+   PERSISTENT EDGE HANDLE
+   ============================================ */
+#tangent-edge-handle {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2147483644;
+  width: 26px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  color: white;
+  border: none;
+  border-radius: 10px 0 0 10px;
+  box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.15s ease, width 0.15s ease;
+}
+
+#tangent-edge-handle:hover {
+  opacity: 1;
+  width: 32px;
+}
+
+/* Hide the handle while a panel is expanded (the dock covers the edge) */
+html.tangent-side-open #tangent-edge-handle {
+  display: none;
+}
+
+/* ============================================
    DOCKED SIDE PANEL
    ============================================ */
 /* While a panel is expanded, the main chat shrinks instead of being covered.

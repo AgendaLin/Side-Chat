@@ -193,6 +193,32 @@
     btn.style.top = `${Math.max(8, top)}px`;
   }
 
+  // ============================================
+  // PERSISTENT EDGE HANDLE
+  // ============================================
+  // Always-available launcher on the right edge: opens a blank side chat.
+  // Hidden via CSS while a panel is expanded (html.tangent-side-open).
+  function createEdgeHandle() {
+    const handle = document.createElement('button');
+    handle.id = 'tangent-edge-handle';
+    handle.title = 'Open Side Chat';
+    handle.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="7" cy="4" r="2.5" fill="currentColor" stroke="none"/>
+        <line x1="7" y1="6.5" x2="7" y2="17.5"/>
+        <circle cx="7" cy="20" r="2.5" fill="currentColor" stroke="none"/>
+        <path d="M7,12 C7,12 7,15 11,15 L17,15 L17,17.5"/>
+        <circle cx="17" cy="20" r="2.5" fill="currentColor" stroke="none"/>
+      </svg>
+    `;
+    handle.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showFloatingPanel('');
+    });
+    document.body.appendChild(handle);
+  }
+
   function setupSelectionButton() {
     document.addEventListener('selectionchange', () => {
       clearTimeout(selectionDebounce);
@@ -1015,6 +1041,9 @@ Context from my main thread:
     // Show our own Side Chat button on any non-empty selection.
     // The platform's native selection toolbar is left untouched.
     setupSelectionButton();
+
+    // Always-available launcher for a blank side chat
+    createEdgeHandle();
 
     document.addEventListener('keydown', handleKeydown);
 
