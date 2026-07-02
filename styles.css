@@ -62,6 +62,13 @@ html.tangent-side-open .thread-tabbar {
   right: calc(var(--tangent-panel-width, 480px) + 12px);
 }
 
+/* chatgpt.com sizes its app root with Tailwind's w-screen (100vw), which
+   ignores the shrunken <html>/<body> and stays under the panel. Cap all
+   w-screen elements to the remaining space while the dock is open. */
+html.tangent-side-open .w-screen {
+  width: calc(100vw - var(--tangent-panel-width, 480px)) !important;
+}
+
 .claude-thread-panel {
   position: fixed;
   top: 0;
