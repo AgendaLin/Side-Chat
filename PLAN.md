@@ -27,12 +27,16 @@ branch `feature/side-chat`，所有目標行為已在 claude.ai 與 chatgpt.com 
    - 否決「html 上掛 CSS transition 做動畫」：claude.ai 上該 transition 會卡死在
      currentTime 0（CSSTransition state running 但永不前進），transition 在 cascade
      優先權最高 → margin 被永久凍結成 0。所以 margin 直接切換、不做動畫。
-2. **觸發改用 `selectionchange`（debounce 150ms）+ 自有按鈕**，不再 MutationObserver
+2. **ChatGPT 的 app 根容器用 Tailwind `w-screen`（100vw）定寬**，viewport 單位
+   不理會 html/body 縮寬，主聊天會被 panel 裁掉。解法：dock 開啟時用
+   `html.tangent-side-open .w-screen { width: calc(100vw - panel寬) !important }`
+   蓋掉（claude.ai 沒有 w-screen 元素，不受影響）。
+3. **觸發改用 `selectionchange`（debounce 150ms）+ 自有按鈕**，不再 MutationObserver
    盯平台 tooltip。原版靠 `button.btn-secondary` + 文字 `Ask ChatGPT` 比對，
    在非英文介面永遠不會命中（這就是原版「GPT 用不了」的根因）。
-3. **單一展開 panel**：開新 thread 或 restore 時自動 minimize 目前展開的，
+4. **單一展開 panel**：開新 thread 或 restore 時自動 minimize 目前展開的，
    多 thread 靠既有 minimized tab bar。
-4. 保留原版的 sessionStorage + URL hash 傳 context、iframe auto-paste、
+5. 保留原版的 sessionStorage + URL hash 傳 context、iframe auto-paste、
    rules.json（ChatGPT iframe header 剝除）、Enter-to-send fix。
 
 ## 已知邊界情況
