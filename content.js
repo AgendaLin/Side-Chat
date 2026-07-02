@@ -11,9 +11,8 @@
   // ============================================
   const CONFIG = {
     minSelectionLength: 1,   // any non-empty (trimmed) selection shows the Side Chat button
-    panelWidth: 480,
-    panelHeight: 600,
-    panelMargin: 20
+    panelWidth: 480,         // initial docked panel width in pixels
+    panelMinWidth: 320
   };
 
   const PLATFORM = window.location.hostname.includes('claude.ai') ? 'claude' : 'chatgpt';
@@ -31,6 +30,7 @@
   let panelCounter = 0;
   const panels = new Map(); // panelId -> { element, minimized, contextSnippet }
   let minimizedTabBar = null;
+  let dockWidth = CONFIG.panelWidth; // current docked panel width, shared by all panels
 
   // ============================================
   // SELECTION ORIGIN CAPTURE
@@ -285,8 +285,26 @@
   }
 
   // ============================================
-  // FLOATING PANEL WITH IFRAME
+  // DOCKED SIDE PANEL WITH IFRAME
   // ============================================
+  // The panel docks to the right edge of the viewport. While a panel is
+  // expanded, <html> gets the `tangent-side-open` class which shrinks the
+  // main chat (body margin-right) instead of covering it.
+  function updateDockState() {
+    const hasExpanded = Array.from(panels.values()).some(p => !p.minimized);
+    const html = document.documentElement;
+    html.style.setProperty('--tangent-panel-width', `${dockWidth}px`);
+    html.classList.toggle('tangent-side-open', hasExpanded);
+    // Shrink the main chat via inline style: both platforms pin html/body
+    // margins with layered !important rules that beat extension stylesheets,
+    // but inline importants still win the cascade.
+    if (hasExpanded) {
+      html.style.setProperty('margin-right', `${dockWidth}px`, 'important');
+    } else {
+      html.style.removeProperty('margin-right');
+    }
+  }
+
   function createFloatingPanel(panelId, contextSnippet, fullContextText) {
     const panel = document.createElement('div');
     panel.className = 'claude-thread-panel';
@@ -351,10 +369,7 @@
       copyContextToClipboard(fullContextText, panel);
     });
 
-    // Make panel draggable via header
-    makeDraggable(panel, panel.querySelector('.thread-panel-header'));
-
-    // Make panel resizable
+    // Make panel width resizable by dragging its left edge
     makeResizable(panel, panel.querySelector('.thread-panel-resize-handle'));
 
     document.body.appendChild(panel);
@@ -362,6 +377,11 @@
   }
 
   function showFloatingPanel(contextText) {
+    // Only one panel is expanded in the dock at a time; minimize the rest
+    for (const [panelId, panelData] of panels) {
+      if (!panelData.minimized) minimizePanel(panelId);
+    }
+
     // Create new panel
     panelCounter++;
     const panelId = panelCounter;
@@ -390,16 +410,9 @@
     error.style.display = 'none';
     iframe.style.display = 'none';
 
-    // Position panel on right side of viewport
-    const viewportHeight = window.innerHeight;
-
-    panel.style.width = `${CONFIG.panelWidth}px`;
-    panel.style.height = `${CONFIG.panelHeight}px`;
-    panel.style.right = `${CONFIG.panelMargin}px`;
-    panel.style.top = `${Math.max(CONFIG.panelMargin, (viewportHeight - CONFIG.panelHeight) / 2)}px`;
-    panel.style.left = 'auto';
-
+    // Dock the panel on the right and shrink the main chat
     panel.classList.add('visible');
+    updateDockState();
 
     // Clear selection (also dismisses Claude's tooltip)
     window.getSelection().removeAllRanges();
@@ -458,16 +471,23 @@
     panelData.element.classList.remove('visible');
 
     updateTabBar();
+    updateDockState();
   }
 
   function expandPanel(panelId) {
     const panelData = panels.get(panelId);
     if (!panelData) return;
 
+    // Only one expanded panel in the dock at a time
+    for (const [otherId, otherData] of panels) {
+      if (otherId !== panelId && !otherData.minimized) minimizePanel(otherId);
+    }
+
     panelData.minimized = false;
     panelData.element.classList.add('visible');
 
     updateTabBar();
+    updateDockState();
 
     // Scroll to origin and highlight the selected text
     scrollToOriginAndHighlight(panelData);
@@ -569,6 +589,7 @@
     panels.delete(panelId);
 
     updateTabBar();
+    updateDockState();
   }
 
   function closeAllPanels() {
@@ -601,72 +622,27 @@ Context from my main thread:
   }
 
   // ============================================
-  // DRAG & RESIZE
+  // RESIZE (docked panel width via left-edge handle)
   // ============================================
-  function makeDraggable(element, handle) {
-    let isDragging = false;
-    let startX, startY, initialX, initialY;
-
-    handle.addEventListener('mousedown', (e) => {
-      if (e.target.closest('.thread-panel-btn')) return; // Don't drag when clicking buttons
-      
-      isDragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      
-      const rect = element.getBoundingClientRect();
-      initialX = rect.left;
-      initialY = rect.top;
-      
-      element.classList.add('dragging');
-      e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-
-      const newLeft = Math.max(-(element.offsetWidth - 50), Math.min(window.innerWidth - 50, initialX + dx));
-      const newTop = Math.max(0, Math.min(window.innerHeight - 40, initialY + dy));
-
-      element.style.left = `${newLeft}px`;
-      element.style.top = `${newTop}px`;
-      element.style.right = 'auto';
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
-        element.classList.remove('dragging');
-      }
-    });
-  }
-
   function makeResizable(element, handle) {
     let isResizing = false;
-    let startX, startY, startWidth, startHeight;
+    let startX, startWidth;
 
     handle.addEventListener('mousedown', (e) => {
       isResizing = true;
       startX = e.clientX;
-      startY = e.clientY;
       startWidth = element.offsetWidth;
-      startHeight = element.offsetHeight;
-      
+
       element.classList.add('resizing');
       e.preventDefault();
     });
 
     document.addEventListener('mousemove', (e) => {
       if (!isResizing) return;
-      
-      const newWidth = Math.max(320, startWidth + (e.clientX - startX));
-      const newHeight = Math.max(400, startHeight + (e.clientY - startY));
-      
-      element.style.width = `${newWidth}px`;
-      element.style.height = `${newHeight}px`;
+
+      const maxWidth = Math.max(CONFIG.panelMinWidth, window.innerWidth - 360);
+      dockWidth = Math.min(maxWidth, Math.max(CONFIG.panelMinWidth, startWidth + (startX - e.clientX)));
+      updateDockState();
     });
 
     document.addEventListener('mouseup', () => {

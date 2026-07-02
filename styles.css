@@ -49,36 +49,48 @@
 }
 
 /* ============================================
-   FLOATING PANEL
+   DOCKED SIDE PANEL
    ============================================ */
+/* While a panel is expanded, the main chat shrinks instead of being covered.
+   The margin is set inline on <html> from content.js: the platforms pin
+   html/body margins with layered !important rules that beat extension
+   stylesheets, and a CSS transition on <html> margin gets stuck at time 0
+   on claude.ai, permanently freezing the value — so no transition here. */
+
+/* Keep minimized tabs visible to the left of the open dock */
+html.tangent-side-open .thread-tabbar {
+  right: calc(var(--tangent-panel-width, 480px) + 12px);
+}
+
 .claude-thread-panel {
   position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: var(--tangent-panel-width, 480px);
   z-index: 2147483646;
   display: flex;
   flex-direction: column;
   background: #1a1a1a;
-  border-radius: 12px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
-  opacity: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
   visibility: hidden;
-  transform: translateX(20px);
-  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+  transform: translateX(105%);
+  transition: transform 0.25s ease, visibility 0.25s ease;
   overflow: hidden;
 }
 
 .claude-thread-panel.visible {
-  opacity: 1;
   visibility: visible;
   transform: translateX(0);
 }
 
-.claude-thread-panel.dragging,
 .claude-thread-panel.resizing {
   transition: none;
   user-select: none;
 }
 
-.claude-thread-panel.dragging iframe {
+.claude-thread-panel.resizing iframe {
   pointer-events: none;
 }
 
@@ -90,7 +102,6 @@
   padding: 12px 16px;
   background: #262626;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  cursor: move;
   flex-shrink: 0;
 }
 
@@ -230,20 +241,20 @@
   background: #b45309;
 }
 
-/* Resize Handle */
+/* Resize Handle (left edge, drag to change dock width) */
 .thread-panel-resize-handle {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 20px;
-  height: 20px;
-  cursor: se-resize;
-  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.1) 50%);
-  border-radius: 0 0 12px 0;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  background: transparent;
+  transition: background 0.15s ease;
 }
 
 .thread-panel-resize-handle:hover {
-  background: linear-gradient(135deg, transparent 50%, rgba(217, 119, 6, 0.3) 50%);
+  background: rgba(217, 119, 6, 0.4);
 }
 
 /* ============================================
