@@ -172,12 +172,13 @@
 
     const btn = document.createElement('button');
     btn.id = 'tangent-side-chat-button';
-    // Docked-layout glyph (dim main pane + bright side pane), monochrome
-    // white to sit on the amber button — matches the extension icon.
+    // Docked-layout glyph: two white panes (dim main + bright side) filling
+    // the box so it reads clearly on the amber button. No background — the
+    // button itself is the amber. Matches the extension icon.
     btn.innerHTML = `
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-        <rect x="3" y="5" width="9" height="14" rx="2" fill="currentColor" opacity="0.5"/>
-        <rect x="13.5" y="5" width="7.5" height="14" rx="2" fill="currentColor"/>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+        <rect x="1.5" y="2.5" width="11" height="19" rx="2.5" fill="currentColor" opacity="0.55"/>
+        <rect x="14.5" y="2.5" width="8" height="19" rx="2.5" fill="currentColor"/>
       </svg>
       Side Chat
     `;
