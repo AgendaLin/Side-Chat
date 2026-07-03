@@ -283,6 +283,34 @@
   // The panel docks to the right edge of the viewport. While it is expanded,
   // <html> gets the `tangent-side-open` class and an inline margin that
   // shrinks the main chat instead of covering it.
+  // The close button is honest about consequences: a temporary side chat is
+  // destroyed (trash), a bound saved conversation is merely unbound and stays
+  // in the platform's history (broken link).
+  const TRASH_ICON_SVG = `
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3 6 5 6 21 6"></polyline>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+      <line x1="10" y1="11" x2="10" y2="17"></line>
+      <line x1="14" y1="11" x2="14" y2="17"></line>
+    </svg>
+  `;
+  const UNLINK_ICON_SVG = `
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+      <path d="M5.17 11.75l-1.72 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+      <line x1="4" y1="4" x2="20" y2="20"></line>
+    </svg>
+  `;
+
+  function updateDiscardButton(panelElement, convKey) {
+    const btn = panelElement.querySelector('.thread-panel-close');
+    if (!btn) return;
+    const bound = !!bindings[convKey];
+    btn.title = bound ? 'Unbind side chat (conversation stays in your history)' : 'Discard thread';
+    btn.innerHTML = bound ? UNLINK_ICON_SVG : TRASH_ICON_SVG;
+  }
+
   function updateDockState() {
     const data = sessionPanels.get(currentConvKey);
     const hasExpanded = !!data && !data.minimized;
@@ -319,15 +347,7 @@
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
           </button>
-          <button class="thread-panel-btn thread-panel-close" title="Discard thread">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              <line x1="10" y1="11" x2="10" y2="17"></line>
-              <line x1="14" y1="11" x2="14" y2="17"></line>
-            </svg>
-          </button>
+          <button class="thread-panel-btn thread-panel-close" title="Discard thread"></button>
         </div>
       </div>
       <div class="thread-panel-body">
@@ -346,6 +366,7 @@
     `;
 
     panel.querySelector('.thread-panel-close').addEventListener('click', () => discardPanel(convKey));
+    updateDiscardButton(panel, convKey);
     panel.querySelector('.thread-panel-minimize').addEventListener('click', () => minimizePanel(convKey));
     panel.querySelector('.thread-open-tab').addEventListener('click', () => {
       const fallbackUrl = PLATFORM === 'claude' ? 'https://claude.ai/new' : 'https://chatgpt.com/';
@@ -629,6 +650,7 @@
           if (bindings[convKey] !== cleanUrl) {
             saveBinding(convKey, cleanUrl);
             updateEdgeHandle();
+            updateDiscardButton(data.element, convKey);
           }
         }
       }
