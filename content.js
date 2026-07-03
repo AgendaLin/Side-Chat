@@ -1,6 +1,8 @@
 /**
- * Tangent – Side Chat for ChatGPT & Claude
+ * SideChat – Side Conversations for ChatGPT & Claude
  * One docked side conversation per main conversation.
+ * (Internal DOM ids / storage keys keep the legacy "tangent" prefix so
+ *  existing bindings survive the rename.)
  */
 
 (function() {
@@ -66,7 +68,7 @@
     try {
       localStorage.setItem(BINDINGS_KEY, JSON.stringify(bindings));
     } catch (e) {
-      console.log('Tangent: could not persist bindings:', e.message);
+      console.log('SideChat: could not persist bindings:', e.message);
     }
   }
 
@@ -74,7 +76,7 @@
     if (convKey === 'new') return; // no stable identity to bind to
     bindings[convKey] = url;
     persistBindings();
-    console.log('Tangent: binding saved for', convKey, '->', url);
+    console.log('SideChat: binding saved for', convKey, '->', url);
   }
 
   function removeBinding(convKey) {
@@ -456,7 +458,7 @@
         clearInterval(check);
         return;
       }
-      console.log('Tangent: side chat rendered blank, retrying load (attempt', retries + ')');
+      console.log('SideChat: side chat rendered blank, retrying load (attempt', retries + ')');
       iframe.src = src;
     }, 5000);
   }
@@ -572,7 +574,7 @@
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.focus();
           } catch (e) {
-            console.error('Tangent: context injection failed', e);
+            console.error('SideChat: context injection failed', e);
           }
           clearInterval(timer);
           return;
@@ -848,7 +850,7 @@ Context from my main thread:
 
     const contextText = sessionStorage.getItem(CONTEXT_STORAGE_KEY);
     if (!contextText) {
-      console.log('Tangent: no context found in sessionStorage');
+      console.log('SideChat: no context found in sessionStorage');
       return;
     }
 
@@ -917,11 +919,11 @@ Context from my main thread:
             observer = null;
           }
 
-          console.log('Tangent: auto-pasted context');
+          console.log('SideChat: auto-pasted context');
           return true;
 
         } catch (err) {
-          console.error('Tangent: error inserting text', err);
+          console.error('SideChat: error inserting text', err);
         }
       }
 
@@ -997,7 +999,7 @@ Context from my main thread:
   function init() {
     // If we're inside an iframe (the side chat), handle iframe-specific features
     if (window.self !== window.top) {
-      console.log('Tangent: running inside iframe');
+      console.log('SideChat: running inside iframe');
       autoPasteContext();
       fixEnterToSend();
       return;
@@ -1014,7 +1016,7 @@ Context from my main thread:
 
     document.addEventListener('keydown', handleKeydown);
 
-    console.log('Tangent initialized on', PLATFORM);
+    console.log('SideChat initialized on', PLATFORM);
   }
 
   if (document.readyState === 'loading') {

@@ -1,4 +1,4 @@
-# Tangent Side Chat – Docked Side Conversations for Claude & ChatGPT
+# SideChat – Docked Side Conversations for Claude & ChatGPT
 
 **Select any text and open a side chat next to your main conversation.**
 
@@ -19,13 +19,14 @@ Each main conversation has **one** side chat.
    appends the new context into the *same* side conversation
 5. **Minimize** (－/Escape) keeps the side chat alive for the page session — the edge handle
    lights up with a dot; click it to bring the conversation back, scrolled to where you
-   branched off. **Discard** (🗑) destroys it.
+   branched off. The close button destroys a temporary side chat (trash icon) or merely
+   unbinds a saved one (broken-link icon — the conversation stays in your history).
 
 ### Keeping a side chat across reloads
 
 Side chats are temporary by default and vanish on reload. To keep one: turn off
 temporary/incognito mode *inside* the side chat using the platform's own toggle. Once it becomes
-a real saved conversation, Tangent remembers the main-conversation → side-conversation binding
+a real saved conversation, SideChat remembers the main-conversation → side-conversation binding
 (in the site's localStorage) and the edge handle restores it next time you open that main
 conversation — across reloads and browser restarts.
 
@@ -50,7 +51,7 @@ conversation — across reloads and browser restarts.
 ## Differences from upstream Tangent
 
 - **No hijacking** — Claude's "Reply" button and ChatGPT's "Ask ChatGPT" button keep their native
-  behavior; Tangent adds its own button instead. (The upstream hijack also silently broke on
+  behavior; SideChat adds its own button instead. (The upstream hijack also silently broke on
   non-English ChatGPT UIs, since it matched the literal button text `Ask ChatGPT`.)
 - **Any non-empty selection triggers** the button (upstream required 10+ characters)
 - **Docked, not floating** — the panel is a full-height dock on the right; the main chat shrinks

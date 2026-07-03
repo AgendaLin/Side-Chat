@@ -7,6 +7,13 @@
 Fork 自 cursed-github/tangent（MIT）。把原本「劫持平台原生選取按鈕」的設計，改成
 Codex 風格的獨立側邊聊天：自有 Side Chat 按鈕 + 右側停靠 panel + 主聊天縮寬。
 
+## 品牌（V2.2.0）
+
+產品改名 **SideChat**（使用者選定），新 icon（琥珀底、主泡泡＋停靠側泡泡，
+`icons/icon.svg` 為源檔，PNG 由 scratchpad 的 PIL 腳本產生）。
+注意：DOM id 與 localStorage key 保留 `tangent-` 前綴 —— 改了會弄丟使用者
+既有綁定，屬相容性包袱，發佈前若要清理需附遷移邏輯。
+
 ## 目前狀態：V2.1.0 完成 — 每對話單一 side chat
 
 V2.1 把 thread 模型從「每次選取開新 thread」改成「**一個主對話綁一個 side chat**」：
