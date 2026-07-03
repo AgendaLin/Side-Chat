@@ -254,13 +254,10 @@
     const handle = document.createElement('button');
     handle.id = 'tangent-edge-handle';
     handle.title = 'Open Side Chat';
+    // Door-handle arc hugging the edge (user-sketched motif)
     handle.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="7" cy="4" r="2.5" fill="currentColor" stroke="none"/>
-        <line x1="7" y1="6.5" x2="7" y2="17.5"/>
-        <circle cx="7" cy="20" r="2.5" fill="currentColor" stroke="none"/>
-        <path d="M7,12 C7,12 7,15 11,15 L17,15 L17,17.5"/>
-        <circle cx="17" cy="20" r="2.5" fill="currentColor" stroke="none"/>
+      <svg width="16" height="34" viewBox="0 0 24 48" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round">
+        <path d="M17,6 C5,15 5,33 17,42"/>
       </svg>
     `;
     handle.addEventListener('click', (e) => {

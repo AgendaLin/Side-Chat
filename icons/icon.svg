@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- SideChat icon: amber rounded square, main chat bubble + docked side bubble -->
+  <!-- SideChat icon (motif C): docked layout — dim main pane + bright side
+       pane with chat lines, on an amber gradient rounded square. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#d97706"/>
@@ -7,14 +8,12 @@
     </linearGradient>
   </defs>
   <rect x="0" y="0" width="512" height="512" rx="102" fill="url(#bg)"/>
-  <!-- main bubble -->
-  <rect x="88" y="128" width="240" height="184" rx="56" fill="#ffffff"/>
-  <polygon points="128,300 128,372 196,304" fill="#ffffff"/>
-  <!-- text dots -->
-  <circle cx="148" cy="220" r="16" fill="#c66006"/>
-  <circle cx="208" cy="220" r="16" fill="#c66006"/>
-  <circle cx="268" cy="220" r="16" fill="#c66006"/>
-  <!-- side bubble (outlined, docked right) -->
-  <rect x="296" y="220" width="152" height="124" rx="44" fill="#a04806" stroke="#ffffff" stroke-width="22"/>
-  <polygon points="408,336 408,396 356,340" fill="#ffffff"/>
+  <!-- main pane (dim) -->
+  <rect x="84" y="110" width="196" height="292" rx="34" fill="#ffffff" opacity="0.55"/>
+  <!-- side pane (bright, the product) -->
+  <rect x="304" y="110" width="124" height="292" rx="34" fill="#ffffff"/>
+  <!-- chat lines -->
+  <rect x="330" y="180" width="74" height="24" rx="12" fill="#c66006"/>
+  <rect x="330" y="244" width="56" height="24" rx="12" fill="#c66006"/>
+  <rect x="330" y="308" width="74" height="24" rx="12" fill="#c66006"/>
 </svg>
