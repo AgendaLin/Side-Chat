@@ -389,6 +389,8 @@
       }
     }, 5000);
 
+    ensureIframeRendered(iframe, iframeSrc);
+
     const data = {
       element: panel,
       minimized: false,
@@ -398,6 +400,44 @@
     };
     sessionPanels.set(convKey, data);
     return data;
+  }
+
+  // chatgpt.com sometimes fails to hydrate inside an iframe and redirects to
+  // a ?mweb_fallback=1 page that renders a completely blank shell. A plain
+  // reload of the original URL recovers it, so watch for a loaded-but-blank
+  // document and retry a few times.
+  function ensureIframeRendered(iframe, src) {
+    let retries = 0;
+    const started = Date.now();
+
+    const check = setInterval(() => {
+      if (!iframe.isConnected || Date.now() - started > 35000) {
+        clearInterval(check);
+        return;
+      }
+
+      let blank = false;
+      try {
+        const idoc = iframe.contentDocument;
+        if (!idoc || idoc.readyState !== 'complete' || !idoc.body) return;
+        blank = idoc.body.children.length <= 1 && idoc.body.textContent.trim().length === 0;
+        if (!blank) {
+          clearInterval(check);
+          return;
+        }
+      } catch (e) {
+        clearInterval(check); // can't inspect — leave the iframe alone
+        return;
+      }
+
+      retries++;
+      if (retries > 3) {
+        clearInterval(check);
+        return;
+      }
+      console.log('Tangent: side chat rendered blank, retrying load (attempt', retries + ')');
+      iframe.src = src;
+    }, 5000);
   }
 
   // Open (or reveal) the side chat for the current conversation.
