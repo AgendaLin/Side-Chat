@@ -336,12 +336,18 @@
       : 'New side chats open as temporary — click for saved conversations';
   }
 
+  // Icon follows the chat's mode, not just its binding: a normal-mode side
+  // chat shows the unlink icon (closing it detaches; anything you send is
+  // kept in your history) even before its first message. Only a temporary
+  // (incognito) chat shows trash — that one really is destroyed on close.
   function updateDiscardButton(panelElement, convKey) {
     const btn = panelElement.querySelector('.thread-panel-close');
     if (!btn) return;
-    const bound = !!bindings[convKey];
-    btn.title = bound ? 'Unbind side chat (conversation stays in your history)' : 'Discard thread';
-    btn.innerHTML = bound ? UNLINK_ICON_SVG : TRASH_ICON_SVG;
+    const kept = !!bindings[convKey] || panelElement.dataset.temporary === 'false';
+    btn.title = kept
+      ? 'Detach side chat (kept as a normal conversation)'
+      : 'Discard thread (temporary — not saved)';
+    btn.innerHTML = kept ? UNLINK_ICON_SVG : TRASH_ICON_SVG;
   }
 
   function updateDockState() {
@@ -364,6 +370,9 @@
     const panel = document.createElement('div');
     panel.className = 'claude-thread-panel';
     panel.dataset.convKey = convKey;
+    // Records whether this side chat opened in temporary (incognito) mode,
+    // so the close button can show trash vs unlink from the start.
+    panel.dataset.temporary = String(/incognito=true|temporary-chat=true/.test(iframeSrc));
 
     panel.innerHTML = `
       <div class="thread-panel-header">
