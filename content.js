@@ -624,7 +624,9 @@
   }
 
   function buildContextText(text) {
-    return `--- Context from my main thread ---\n"${text}"\n\n`;
+    // One-line context, then a single line break so the caret sits on the
+    // next line ready for the question (no extra blank line).
+    return `--- Context from my main chat: "${text}" ---\n`;
   }
 
   function injectContext(panelElement, text) {
