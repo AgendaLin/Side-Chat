@@ -334,10 +334,11 @@
     panel.innerHTML = `
       <div class="thread-panel-header">
         <div class="thread-panel-title">
-          <div class="thread-orbit-active">
-            <div class="orbit-dot orbit-dot-1"></div>
-            <div class="orbit-dot orbit-dot-2"></div>
-          </div>
+          <svg class="sidechat-logo" width="18" height="18" viewBox="0 0 512 512">
+            <rect x="0" y="0" width="512" height="512" rx="102" fill="#d97706"/>
+            <rect x="84" y="110" width="196" height="292" rx="34" fill="#ffffff" opacity="0.55"/>
+            <rect x="304" y="110" width="124" height="292" rx="34" fill="#ffffff"/>
+          </svg>
           <span>Side Chat</span>
         </div>
         <div class="thread-panel-actions">

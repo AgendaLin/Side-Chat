@@ -334,49 +334,11 @@ html.tangent-side-open .w-screen {
 }
 
 /* ============================================
-   ORBIT INDICATOR — ACTIVE (two amber dots orbiting)
+   TITLE LOGO
    ============================================ */
-.thread-orbit-active {
-  position: relative;
-  width: 20px;
-  height: 20px;
-  pointer-events: none;
-}
-
-.orbit-dot {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #d97706;
-  box-shadow: 0 0 8px 2px rgba(217, 119, 6, 0.5);
-  top: 50%;
-  left: 50%;
-  margin: -3.5px 0 0 -3.5px;
-}
-
-.orbit-dot-1 {
-  animation: orbit-1 3s ease-in-out infinite;
-}
-
-.orbit-dot-2 {
-  animation: orbit-2 3s ease-in-out infinite;
-}
-
-@keyframes orbit-1 {
-  0%   { transform: translate(8px, 0); }
-  25%  { transform: translate(0, -5px); }
-  50%  { transform: translate(-8px, 0); }
-  75%  { transform: translate(0, 5px); }
-  100% { transform: translate(8px, 0); }
-}
-
-@keyframes orbit-2 {
-  0%   { transform: translate(-8px, 0); }
-  25%  { transform: translate(0, 5px); }
-  50%  { transform: translate(8px, 0); }
-  75%  { transform: translate(0, -5px); }
-  100% { transform: translate(-8px, 0); }
+.sidechat-logo {
+  flex-shrink: 0;
+  border-radius: 4px;
 }
 
 /* ============================================
