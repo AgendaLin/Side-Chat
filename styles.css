@@ -179,6 +179,67 @@ html.tangent-side-open .w-screen {
   gap: 4px;
 }
 
+/* Default-mode slide switch (Temp <-> Saved) */
+.thread-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+  padding: 4px 6px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.thread-mode-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mode-label {
+  color: #6b6b6b;
+  transition: color 0.15s ease;
+  user-select: none;
+}
+
+.thread-mode-toggle .mode-label-temp { color: #e5e5e5; }
+.thread-mode-toggle.mode-normal .mode-label-temp { color: #6b6b6b; }
+.thread-mode-toggle.mode-normal .mode-label-norm { color: #f5b942; }
+
+.mode-track {
+  position: relative;
+  width: 30px;
+  height: 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.18);
+  transition: background 0.18s ease;
+  flex-shrink: 0;
+}
+
+.thread-mode-toggle.mode-normal .mode-track {
+  background: #d97706;
+}
+
+.mode-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #d4d4d4;
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.thread-mode-toggle.mode-normal .mode-knob {
+  transform: translateX(14px);
+  background: #fff;
+}
+
 .thread-panel-btn {
   display: flex;
   align-items: center;

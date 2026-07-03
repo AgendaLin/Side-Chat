@@ -7,6 +7,18 @@
 Fork 自 cursed-github/tangent（MIT）。把原本「劫持平台原生選取按鈕」的設計，改成
 Codex 風格的獨立側邊聊天：自有 Side Chat 按鈕 + 右側停靠 panel + 主聊天縮寬。
 
+## V2.3.0 — 換行注入 + 預設模式開關
+
+- **context 注入改用 `document.execCommand('insertText', …)`**：TipTap（Claude）與
+  ProseMirror（ChatGPT）都會把 `\n` 轉成獨立段落，格式尾端的 `\n\n` 讓游標停在
+  空行等輸入。取代原本手動塞 text node（換行會被吃掉）的做法。兩處注入
+  （`injectContext` 父層重用、`autoPasteContext` iframe 首載）共用 `insertIntoEditor`。
+  context 格式精簡為兩行：`--- Context from my main thread ---` + `"選取文字"`。
+- **預設模式開關**：panel header 加一個 Temp↔Saved 滑動開關，改的是「下一個新
+  side chat」的預設模式，不動當前對話（要轉當前對話用 iframe 內平台自己的開關）。
+  存 localStorage（key `tangent-side-chat-default-mode`）。normal 模式開
+  `/new`（Claude）或 `/`（ChatGPT）不帶臨時參數，一送訊息就自動綁定持久化。
+
 ## 品牌（V2.2.0）
 
 產品改名 **SideChat**（使用者選定），新 icon（琥珀底、主泡泡＋停靠側泡泡，

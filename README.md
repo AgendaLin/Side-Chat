@@ -15,8 +15,9 @@ Each main conversation has **one** side chat.
    handle on the right edge for a blank side chat)
 3. **A docked panel opens on the right** with a fresh temporary/incognito chat; the main chat
    shrinks to make room instead of being covered
-4. **Your selected context is auto-pasted** into the side chat input; selecting more text later
-   appends the new context into the *same* side conversation
+4. **Your selected context is auto-pasted** into the side chat input as its own lines, with a
+   blank line and the caret waiting below so you can type your question straight away; selecting
+   more text later appends the new context into the *same* side conversation
 5. **Minimize** (－/Escape) keeps the side chat alive for the page session — the edge handle
    lights up with a dot; click it to bring the conversation back, scrolled to where you
    branched off. The close button destroys a temporary side chat (trash icon) or merely
@@ -63,8 +64,9 @@ conversation — across reloads and browser restarts.
 - Works on **claude.ai** and **chatgpt.com**
 - **One side chat per conversation** — every selection feeds the same side conversation instead
   of spawning new threads; switching main conversations switches the side chat with it
-- **Temporary by default** — side chats run in incognito / temporary-chat mode, no sidebar
-  clutter; opt into persistence per side chat via the platform's own temporary-mode toggle
+- **Temporary by default, switchable** — side chats open in incognito / temporary-chat mode
+  (no sidebar clutter). A **Temp ↔ Saved** slide switch in the panel header sets the default mode
+  for new side chats and is remembered; "Saved" opens them as normal conversations that persist
 - **Session persistence** — minimized side chats keep their iframe alive; saved side chats are
   restorable across reloads via the edge handle
 - **Visual scroll-back** — restoring a minimized side chat highlights the text you branched from

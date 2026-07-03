@@ -41,6 +41,25 @@
   // side chat, making it a real saved conversation on the platform.
   const bindings = {};
 
+  // Default mode for a freshly-opened side chat: 'temporary' (incognito/
+  // temporary chat, nothing saved) or 'normal' (a real saved conversation).
+  // Toggled by the switch in the panel header, remembered in localStorage.
+  const MODE_KEY = 'tangent-side-chat-default-mode';
+  let defaultMode = 'temporary';
+
+  function loadDefaultMode() {
+    try {
+      const m = localStorage.getItem(MODE_KEY);
+      if (m === 'temporary' || m === 'normal') defaultMode = m;
+    } catch (e) { /* ignore */ }
+  }
+
+  function setDefaultMode(mode) {
+    defaultMode = mode;
+    try { localStorage.setItem(MODE_KEY, mode); } catch (e) { /* ignore */ }
+    for (const [, data] of sessionPanels) syncModeToggle(data.element);
+  }
+
   // ============================================
   // MAIN CONVERSATION KEY
   // ============================================
@@ -302,6 +321,21 @@
     </svg>
   `;
 
+  // Reflect the saved default mode on a panel's header toggle. The toggle
+  // sets the default for the NEXT new side chat; it does not convert the
+  // current conversation (use the platform's own toggle inside the iframe
+  // for that).
+  function syncModeToggle(panelElement) {
+    const toggle = panelElement.querySelector('.thread-mode-toggle');
+    if (!toggle) return;
+    const normal = defaultMode === 'normal';
+    toggle.classList.toggle('mode-normal', normal);
+    toggle.setAttribute('aria-checked', normal ? 'true' : 'false');
+    toggle.title = normal
+      ? 'New side chats open as saved conversations — click for temporary'
+      : 'New side chats open as temporary — click for saved conversations';
+  }
+
   function updateDiscardButton(panelElement, convKey) {
     const btn = panelElement.querySelector('.thread-panel-close');
     if (!btn) return;
@@ -342,6 +376,11 @@
           <span>Side Chat</span>
         </div>
         <div class="thread-panel-actions">
+          <button class="thread-mode-toggle" title="Default mode for new side chats" role="switch">
+            <span class="mode-label mode-label-temp">Temp</span>
+            <span class="mode-track"><span class="mode-knob"></span></span>
+            <span class="mode-label mode-label-norm">Saved</span>
+          </button>
           <button class="thread-panel-btn thread-panel-minimize" title="Minimize thread">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -367,6 +406,11 @@
 
     panel.querySelector('.thread-panel-close').addEventListener('click', () => discardPanel(convKey));
     updateDiscardButton(panel, convKey);
+
+    panel.querySelector('.thread-mode-toggle').addEventListener('click', () => {
+      setDefaultMode(defaultMode === 'temporary' ? 'normal' : 'temporary');
+    });
+    syncModeToggle(panel);
     panel.querySelector('.thread-panel-minimize').addEventListener('click', () => minimizePanel(convKey));
     panel.querySelector('.thread-open-tab').addEventListener('click', () => {
       const fallbackUrl = PLATFORM === 'claude' ? 'https://claude.ai/new' : 'https://chatgpt.com/';
@@ -494,15 +538,24 @@
       return;
     }
 
-    // Fresh temporary side chat. Context travels via sessionStorage + URL
-    // hash so the iframe-side script can paste it once the input exists.
+    // Fresh side chat. Context travels via sessionStorage + URL hash so the
+    // iframe-side script can paste it once the input exists. The mode
+    // (temporary vs normal) follows the user's saved default.
     if (contextText) {
       sessionStorage.setItem(CONTEXT_STORAGE_KEY, contextText);
       copyContextToClipboard(contextText);
     }
-    const src = PLATFORM === 'claude'
-      ? `https://claude.ai/new?incognito=true${contextText ? CONTEXT_HASH : ''}`
-      : `https://chatgpt.com/?temporary-chat=true${contextText ? CONTEXT_HASH : ''}`;
+    const hash = contextText ? CONTEXT_HASH : '';
+    let src;
+    if (defaultMode === 'normal') {
+      src = PLATFORM === 'claude'
+        ? `https://claude.ai/new${hash}`
+        : `https://chatgpt.com/${hash}`;
+    } else {
+      src = PLATFORM === 'claude'
+        ? `https://claude.ai/new?incognito=true${hash}`
+        : `https://chatgpt.com/?temporary-chat=true${hash}`;
+    }
     createPanelData(convKey, src);
     expandPanel(convKey);
     window.getSelection().removeAllRanges();
@@ -551,32 +604,45 @@
   // ============================================
   // CONTEXT INJECTION (parent side, into live iframe)
   // ============================================
+  // Shared editor insertion. execCommand('insertText') is honored by both
+  // TipTap (Claude) and ProseMirror (ChatGPT): newlines become paragraphs,
+  // so the trailing "\n\n" leaves a blank line with the caret waiting below.
+  function insertIntoEditor(doc, win, input, text) {
+    input.focus();
+    const sel = win.getSelection();
+    const range = doc.createRange();
+    range.selectNodeContents(input);
+    range.collapse(false); // caret to end — append after any existing text
+    sel.removeAllRanges();
+    sel.addRange(range);
+    doc.execCommand('insertText', false, text);
+  }
+
+  function buildContextText(text) {
+    return `--- Context from my main thread ---\n"${text}"\n\n`;
+  }
+
   function injectContext(panelElement, text) {
     const iframe = panelElement.querySelector('.thread-iframe');
-    const formatted = `---\nContext from my main thread:\n"${text}"\n---\n\n`;
+    const formatted = buildContextText(text);
     const deadline = Date.now() + 10000;
 
     const timer = setInterval(() => {
-      let doc = null;
-      try { doc = iframe.contentDocument; } catch (e) { /* not ready */ }
+      let doc = null, win = null;
+      try { doc = iframe.contentDocument; win = iframe.contentWindow; } catch (e) { return; }
+      if (!doc) return;
 
-      if (doc) {
-        const input = doc.querySelector('[data-testid="chat-input"]')
-          || doc.querySelector('.ProseMirror[contenteditable="true"]')
-          || doc.querySelector('#prompt-textarea');
-        if (input) {
-          try {
-            const target = input.querySelector('p') || input;
-            target.appendChild(doc.createTextNode(formatted));
-            target.classList.remove('is-empty', 'is-editor-empty');
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.focus();
-          } catch (e) {
-            console.error('SideChat: context injection failed', e);
-          }
-          clearInterval(timer);
-          return;
+      const input = doc.querySelector('[data-testid="chat-input"]')
+        || doc.querySelector('.ProseMirror[contenteditable="true"]')
+        || doc.querySelector('#prompt-textarea');
+      if (input) {
+        try {
+          insertIntoEditor(doc, win, input, formatted);
+        } catch (e) {
+          console.error('SideChat: context injection failed', e);
         }
+        clearInterval(timer);
+        return;
       }
 
       if (Date.now() > deadline) clearInterval(timer);
@@ -735,14 +801,7 @@
   // CLIPBOARD
   // ============================================
   function copyContextToClipboard(text) {
-    const template = `---
-Context from my main thread:
-"${text}"
----
-
-`;
-
-    navigator.clipboard.writeText(template).catch(() => {
+    navigator.clipboard.writeText(buildContextText(text)).catch(() => {
       // Silently ignore — clipboard API fails when document lacks focus
     });
   }
@@ -855,7 +914,7 @@ Context from my main thread:
     // Clear the stored context to prevent reuse
     sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
 
-    const formattedContext = `---\nContext from my main thread:\n"${contextText}"\n---\n\n`;
+    const formattedContext = buildContextText(contextText);
 
     let hasInserted = false;
     let observer = null;
@@ -864,52 +923,17 @@ Context from my main thread:
     function findAndFillInput() {
       if (hasInserted) return true;
 
-      let inputElement = document.querySelector('[data-testid="chat-input"]');
-
-      if (!inputElement) {
-        inputElement = document.querySelector('.tiptap.ProseMirror[contenteditable="true"]');
-      }
-      if (!inputElement) {
-        inputElement = document.querySelector('.ProseMirror[contenteditable="true"]');
-      }
-      if (!inputElement) {
-        inputElement = document.querySelector('[contenteditable="true"][aria-label*="prompt"]');
-      }
-      if (!inputElement) {
-        inputElement = document.querySelector('#prompt-textarea');
-      }
+      let inputElement = document.querySelector('[data-testid="chat-input"]')
+        || document.querySelector('.tiptap.ProseMirror[contenteditable="true"]')
+        || document.querySelector('.ProseMirror[contenteditable="true"]')
+        || document.querySelector('[contenteditable="true"][aria-label*="prompt"]')
+        || document.querySelector('#prompt-textarea');
 
       if (inputElement) {
         try {
-          inputElement.focus();
-
-          // Clear existing content - for TipTap/ProseMirror, clear the inner paragraph
-          const existingParagraph = inputElement.querySelector('p');
-          if (existingParagraph) {
-            existingParagraph.innerHTML = '';
-          } else {
-            inputElement.innerHTML = '<p></p>';
-          }
-
-          const targetP = inputElement.querySelector('p') || inputElement;
-          targetP.appendChild(document.createTextNode(formattedContext));
-          targetP.classList.remove('is-empty', 'is-editor-empty');
-
-          inputElement.dispatchEvent(new InputEvent('input', {
-            bubbles: true,
-            cancelable: true,
-            inputType: 'insertText',
-            data: formattedContext
-          }));
-          inputElement.dispatchEvent(new Event('input', { bubbles: true }));
-
-          // Move cursor to end
-          const selection = window.getSelection();
-          const range = document.createRange();
-          range.selectNodeContents(targetP);
-          range.collapse(false);
-          selection.removeAllRanges();
-          selection.addRange(range);
+          // execCommand insertText: newlines become paragraphs, caret ends on
+          // the trailing blank line ready for the user's question.
+          insertIntoEditor(document, window, inputElement, formattedContext);
 
           hasInserted = true;
           if (observer) {
@@ -1005,6 +1029,7 @@ Context from my main thread:
 
     currentConvKey = getConvKey();
     loadBindings();
+    loadDefaultMode();
 
     setupSelectionButton();
     createEdgeHandle();
