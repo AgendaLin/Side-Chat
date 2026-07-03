@@ -43,10 +43,12 @@
   // MAIN CONVERSATION KEY
   // ============================================
   function getConvKey() {
+    // Not anchored: ChatGPT project/GPT conversations live under
+    // /g/<project>/c/<id>, Claude project chats under /project/.../chat/<id>.
     const path = location.pathname;
     const m = PLATFORM === 'claude'
-      ? path.match(/^\/chat\/([\w-]+)/)
-      : path.match(/^\/c\/([\w-]+)/);
+      ? path.match(/\/chat\/([\w-]+)/)
+      : path.match(/\/c\/([\w-]+)/);
     return m ? m[1] : 'new';
   }
 
@@ -576,8 +578,8 @@
         try { url = new URL(href); } catch (e) { continue; }
 
         const isConversation = PLATFORM === 'claude'
-          ? /^\/chat\/[\w-]+/.test(url.pathname)
-          : /^\/c\/[\w-]+/.test(url.pathname);
+          ? /\/chat\/[\w-]+/.test(url.pathname)
+          : /\/c\/[\w-]+/.test(url.pathname);
         const isTemporary = PLATFORM === 'claude'
           ? url.searchParams.get('incognito') === 'true'
           : url.searchParams.get('temporary-chat') === 'true';
