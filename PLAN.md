@@ -7,6 +7,16 @@
 Fork 自 cursed-github/tangent（MIT）。把原本「劫持平台原生選取按鈕」的設計，改成
 Codex 風格的獨立側邊聊天：自有 Side Chat 按鈕 + 右側停靠 panel + 主聊天縮寬。
 
+## V2.3.1 — 修 fresh 路徑 context 沒注入
+
+V2.3 把注入改成 execCommand 後，**新開（fresh）side chat 的 context 不會貼進去**：
+autoPasteContext 在剛載入、還沒取得焦點的 iframe 內部跑 execCommand，會靜默
+no-op（舊版手動塞 text node 不需焦點所以沒事）。改成**所有注入都由 parent 驅動**
+（`injectContext`，execCommand 由有焦點的頂層文件呼叫 iframe，可靠），fresh 與
+restore 路徑統一。移除 iframe 側 autoPasteContext + sessionStorage + URL hash 機制。
+injectContext 加了「注入後驗證 marker 有沒有進去，沒進去下一 tick 重試」的保險。
+教訓：v2.3 當時說「fresh 路徑共用同一 helper 就不重測」是錯的，focus context 不同。
+
 ## V2.3.0 — 換行注入 + 預設模式開關
 
 - **context 注入改用 `document.execCommand('insertText', …)`**：TipTap（Claude）與

@@ -19,9 +19,6 @@
 
   const PLATFORM = window.location.hostname.includes('claude.ai') ? 'claude' : 'chatgpt';
 
-  const CONTEXT_HASH = '#tangent-side-chat';
-  const CONTEXT_STORAGE_KEY = 'tangent-side-chat-context';
-
   // ============================================
   // STATE
   // ============================================
@@ -547,25 +544,25 @@
       return;
     }
 
-    // Fresh side chat. Context travels via sessionStorage + URL hash so the
-    // iframe-side script can paste it once the input exists. The mode
-    // (temporary vs normal) follows the user's saved default.
-    if (contextText) {
-      sessionStorage.setItem(CONTEXT_STORAGE_KEY, contextText);
-      copyContextToClipboard(contextText);
-    }
-    const hash = contextText ? CONTEXT_HASH : '';
+    // Fresh side chat. The mode (temporary vs normal) follows the user's
+    // saved default. Context is injected from here (parent-driven) once the
+    // iframe input appears — execCommand needs the calling document focused,
+    // which the top page is but a freshly-loaded iframe is not.
     let src;
     if (defaultMode === 'normal') {
       src = PLATFORM === 'claude'
-        ? `https://claude.ai/new${hash}`
-        : `https://chatgpt.com/${hash}`;
+        ? 'https://claude.ai/new'
+        : 'https://chatgpt.com/';
     } else {
       src = PLATFORM === 'claude'
-        ? `https://claude.ai/new?incognito=true${hash}`
-        : `https://chatgpt.com/?temporary-chat=true${hash}`;
+        ? 'https://claude.ai/new?incognito=true'
+        : 'https://chatgpt.com/?temporary-chat=true';
     }
-    createPanelData(convKey, src);
+    data = createPanelData(convKey, src);
+    if (contextText) {
+      injectContext(data.element, contextText);
+      copyContextToClipboard(contextText);
+    }
     expandPanel(convKey);
     window.getSelection().removeAllRanges();
   }
@@ -604,7 +601,6 @@
       sessionPanels.delete(convKey);
     }
     removeBinding(convKey);
-    sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
 
     updateDockState();
     updateEdgeHandle();
@@ -634,7 +630,8 @@
   function injectContext(panelElement, text) {
     const iframe = panelElement.querySelector('.thread-iframe');
     const formatted = buildContextText(text);
-    const deadline = Date.now() + 10000;
+    const marker = text.slice(0, 12);
+    const deadline = Date.now() + 12000;
 
     const timer = setInterval(() => {
       let doc = null, win = null;
@@ -644,14 +641,24 @@
       const input = doc.querySelector('[data-testid="chat-input"]')
         || doc.querySelector('.ProseMirror[contenteditable="true"]')
         || doc.querySelector('#prompt-textarea');
+
       if (input) {
+        // Already contains our context (or the user has typed) — done.
+        if (input.textContent.includes(marker)) {
+          clearInterval(timer);
+          return;
+        }
         try {
           insertIntoEditor(doc, win, input, formatted);
         } catch (e) {
           console.error('SideChat: context injection failed', e);
         }
-        clearInterval(timer);
-        return;
+        // Verify it landed; execCommand can silently no-op if the iframe
+        // isn't focused yet. If it didn't take, the next tick retries.
+        if (input.textContent.includes(marker)) {
+          clearInterval(timer);
+          return;
+        }
       }
 
       if (Date.now() > deadline) clearInterval(timer);
@@ -907,82 +914,6 @@
   }
 
   // ============================================
-  // AUTO-PASTE CONTEXT (runs inside the side chat iframe)
-  // ============================================
-  function autoPasteContext() {
-    if (window.location.hash !== CONTEXT_HASH) {
-      return;
-    }
-
-    const contextText = sessionStorage.getItem(CONTEXT_STORAGE_KEY);
-    if (!contextText) {
-      console.log('SideChat: no context found in sessionStorage');
-      return;
-    }
-
-    // Clear the stored context to prevent reuse
-    sessionStorage.removeItem(CONTEXT_STORAGE_KEY);
-
-    const formattedContext = buildContextText(contextText);
-
-    let hasInserted = false;
-    let observer = null;
-    const timeoutMs = 10000;
-
-    function findAndFillInput() {
-      if (hasInserted) return true;
-
-      let inputElement = document.querySelector('[data-testid="chat-input"]')
-        || document.querySelector('.tiptap.ProseMirror[contenteditable="true"]')
-        || document.querySelector('.ProseMirror[contenteditable="true"]')
-        || document.querySelector('[contenteditable="true"][aria-label*="prompt"]')
-        || document.querySelector('#prompt-textarea');
-
-      if (inputElement) {
-        try {
-          // execCommand insertText: newlines become paragraphs, caret ends on
-          // the trailing blank line ready for the user's question.
-          insertIntoEditor(document, window, inputElement, formattedContext);
-
-          hasInserted = true;
-          if (observer) {
-            observer.disconnect();
-            observer = null;
-          }
-
-          console.log('SideChat: auto-pasted context');
-          return true;
-
-        } catch (err) {
-          console.error('SideChat: error inserting text', err);
-        }
-      }
-
-      return false;
-    }
-
-    if (findAndFillInput()) {
-      return;
-    }
-
-    observer = new MutationObserver(() => {
-      findAndFillInput();
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
-    setTimeout(() => {
-      if (!hasInserted && observer) {
-        observer.disconnect();
-        observer = null;
-      }
-    }, timeoutMs);
-  }
-
-  // ============================================
   // ENTER TO SEND FIX (runs inside the side chat iframe)
   // ============================================
   function fixEnterToSend() {
@@ -1031,7 +962,6 @@
     // If we're inside an iframe (the side chat), handle iframe-specific features
     if (window.self !== window.top) {
       console.log('SideChat: running inside iframe');
-      autoPasteContext();
       fixEnterToSend();
       return;
     }
