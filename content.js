@@ -173,8 +173,8 @@
     const btn = document.createElement('button');
     btn.id = 'tangent-side-chat-button';
     // Docked-layout glyph: two white panes (dim main + bright side) filling
-    // the box so it reads clearly on the amber button. No background — the
-    // button itself is the amber. Matches the extension icon.
+    // the box so it reads clearly on the violet button. No background — the
+    // button itself is the violet. Matches the extension icon.
     btn.innerHTML = `
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
         <rect x="1.5" y="2.5" width="11" height="19" rx="2.5" fill="currentColor" opacity="0.55"/>
@@ -375,7 +375,7 @@
       <div class="thread-panel-header">
         <div class="thread-panel-title">
           <svg class="sidechat-logo" width="18" height="18" viewBox="0 0 512 512">
-            <rect x="0" y="0" width="512" height="512" rx="102" fill="#d97706"/>
+            <rect x="0" y="0" width="512" height="512" rx="102" fill="#7c3aed"/>
             <rect x="84" y="110" width="196" height="292" rx="34" fill="#ffffff" opacity="0.55"/>
             <rect x="304" y="110" width="124" height="292" rx="34" fill="#ffffff"/>
           </svg>

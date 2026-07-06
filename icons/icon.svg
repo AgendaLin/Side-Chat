@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!-- SideChat icon (motif C): docked layout — dim main pane + bright side
-       pane with chat lines, on an amber gradient rounded square. -->
+       pane with chat lines, on a violet gradient rounded square. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#d97706"/>
-      <stop offset="1" stop-color="#b45309"/>
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#6d28d9"/>
     </linearGradient>
   </defs>
   <rect x="0" y="0" width="512" height="512" rx="102" fill="url(#bg)"/>
@@ -13,7 +13,7 @@
   <!-- side pane (bright, the product) -->
   <rect x="304" y="110" width="124" height="292" rx="34" fill="#ffffff"/>
   <!-- chat lines -->
-  <rect x="330" y="180" width="74" height="24" rx="12" fill="#c66006"/>
-  <rect x="330" y="244" width="56" height="24" rx="12" fill="#c66006"/>
-  <rect x="330" y="308" width="74" height="24" rx="12" fill="#c66006"/>
+  <rect x="330" y="180" width="74" height="24" rx="12" fill="#7c3aed"/>
+  <rect x="330" y="244" width="56" height="24" rx="12" fill="#7c3aed"/>
+  <rect x="330" y="308" width="74" height="24" rx="12" fill="#7c3aed"/>
 </svg>

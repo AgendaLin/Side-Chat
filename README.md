@@ -11,7 +11,7 @@ thread panel docks to the right edge instead of floating over the page.
 Each main conversation has **one** side chat.
 
 1. **Select any text** in a Claude or ChatGPT conversation — even a single character
-2. **Click the "Side Chat" button** that appears next to your selection (or click the amber
+2. **Click the "Side Chat" button** that appears next to your selection (or click the violet
    handle on the right edge for a blank side chat)
 3. **A docked panel opens on the right** with a fresh temporary/incognito chat; the main chat
    shrinks to make room instead of being covered
