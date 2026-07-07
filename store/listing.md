@@ -15,7 +15,10 @@ follow-ups without cluttering your main conversation.
 
 ## Category
 
-Productivity
+Workflow & Planning
+(The old single "Productivity" category is now a group header; in the
+dashboard pick the "Workflow & Planning" sub-category. "Tools" is an
+acceptable alternative.)
 
 ## Detailed description
 
