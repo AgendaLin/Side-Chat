@@ -1,3 +1,6 @@
-model-summary.md
-video-slides/
+# Chrome-generated when loaded unpacked
 _metadata/
+
+# Build artifacts (extension package) and store-only binary assets
+dist/
+store/screenshots/
