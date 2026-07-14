@@ -8,6 +8,12 @@
 (function() {
   'use strict';
 
+  // Guard against running twice in the same frame: the background worker may
+  // re-inject content.js into a tab that already ran it declaratively (e.g. on
+  // startup, where restored tabs otherwise miss the declarative injection).
+  if (window.__sideChatContentLoaded) return;
+  window.__sideChatContentLoaded = true;
+
   // ============================================
   // CONFIGURATION
   // ============================================
