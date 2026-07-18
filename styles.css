@@ -56,7 +56,10 @@
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 2147483644;
+  /* Max 32-bit z-index: ChatGPT's centred message-navigation rail hugs the
+     right edge and otherwise steals pointer events over the top of the
+     handle, leaving only its bottom clickable. */
+  z-index: 2147483647;
   width: 26px;
   height: 56px;
   display: flex;
@@ -76,6 +79,14 @@
 #tangent-edge-handle:hover {
   opacity: 1;
   width: 32px;
+}
+
+/* While being dragged to a new vertical position */
+#tangent-edge-handle.dragging {
+  opacity: 1;
+  width: 32px;
+  cursor: grabbing;
+  transition: none;
 }
 
 /* Hide the handle while a panel is expanded (the dock covers the edge) */

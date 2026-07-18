@@ -272,23 +272,90 @@
   // minimized or restorable (click brings it back).
   let edgeHandle = null;
 
+  // Vertical position of the edge handle, stored as a 0..1 ratio of the
+  // viewport height so it survives window resizes. Default 0.5 (centred).
+  // Draggable so users can move it clear of ChatGPT's centred message-
+  // navigation rail, which otherwise sits over the handle.
+  const HANDLE_POS_KEY = 'tangent-edge-handle-pos';
+
+  function loadHandlePosRatio() {
+    try {
+      const v = parseFloat(localStorage.getItem(HANDLE_POS_KEY));
+      if (v >= 0 && v <= 1) return v;
+    } catch (e) { /* ignore */ }
+    return 0.5;
+  }
+
+  // Place the handle so its centre sits at `ratio` of the viewport height,
+  // clamped to stay fully on-screen. Overrides the CSS top:50%/translateY.
+  function applyHandlePos(ratio) {
+    if (!edgeHandle) return;
+    const h = edgeHandle.offsetHeight || 56;
+    const top = Math.max(0, Math.min(window.innerHeight - h, ratio * window.innerHeight - h / 2));
+    edgeHandle.style.top = `${top}px`;
+    edgeHandle.style.transform = 'none';
+  }
+
   function createEdgeHandle() {
     const handle = document.createElement('button');
     handle.id = 'tangent-edge-handle';
-    handle.title = 'Open Side Chat';
+    handle.title = 'Open Side Chat  ·  drag to move';
     // Door-handle arc hugging the edge (user-sketched motif)
     handle.innerHTML = `
       <svg width="16" height="34" viewBox="0 0 24 48" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round">
         <path d="M17,6 C5,15 5,33 17,42"/>
       </svg>
     `;
+
+    // Drag to reposition vertically; a plain click still opens the side chat.
+    // We only treat it as a drag once the pointer moves past a small
+    // threshold, so ordinary clicks are never swallowed.
+    let drag = null;
+    let suppressClick = false;
+    const DRAG_THRESHOLD = 4;
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      drag = { startY: e.clientY, startTop: handle.getBoundingClientRect().top, moved: false };
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!drag) return;
+      const dy = e.clientY - drag.startY;
+      if (!drag.moved && Math.abs(dy) < DRAG_THRESHOLD) return;
+      drag.moved = true;
+      handle.classList.add('dragging');
+      const h = handle.offsetHeight || 56;
+      const top = Math.max(0, Math.min(window.innerHeight - h, drag.startTop + dy));
+      handle.style.top = `${top}px`;
+      handle.style.transform = 'none';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!drag) return;
+      if (drag.moved) {
+        handle.classList.remove('dragging');
+        suppressClick = true; // the trailing click event is from the drag
+        const h = handle.offsetHeight || 56;
+        const ratio = (parseFloat(handle.style.top) + h / 2) / window.innerHeight;
+        try { localStorage.setItem(HANDLE_POS_KEY, String(ratio)); } catch (e) { /* ignore */ }
+      }
+      drag = null;
+    });
+
     handle.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (suppressClick) { suppressClick = false; return; }
       openSidePanel('');
     });
+
     document.body.appendChild(handle);
     edgeHandle = handle;
+    applyHandlePos(loadHandlePosRatio());
+
+    // Keep the same relative position when the window is resized.
+    window.addEventListener('resize', () => applyHandlePos(loadHandlePosRatio()));
   }
 
   function updateEdgeHandle() {
