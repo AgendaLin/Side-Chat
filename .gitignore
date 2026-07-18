@@ -4,3 +4,4 @@ _metadata/
 # Build artifacts (extension package) and store-only binary assets
 dist/
 store/screenshots/
+store/*.png
