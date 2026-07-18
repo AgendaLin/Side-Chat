@@ -499,6 +499,7 @@
 
     makeResizable(panel, panel.querySelector('.thread-panel-resize-handle'));
     document.body.appendChild(panel);
+    maybeInjectWhatsNew(panel);
 
     const iframe = panel.querySelector('.thread-iframe');
     const loading = panel.querySelector('.thread-panel-loading');
@@ -1031,6 +1032,110 @@
   }
 
   // ============================================
+  // WHAT'S NEW (post-update banner in the panel)
+  // ============================================
+  // After an update, show a small one-time banner inside the side panel with
+  // a short note and a feedback link. Localised by the browser's UI language.
+  //
+  const FEEDBACK_FORM_URL = 'https://forms.gle/gjivseJR8cakK9Fx5';
+
+  // The "NEW" tag at the start of the banner. Shown as-is in every language.
+  const NEW_BADGE = 'NEW';
+
+  // Per-version release notes (just the description — the NEW pill is added
+  // automatically). Add an entry each release; omit a version to skip its
+  // banner. Always provide 'en' as the fallback. Keys are matched against the
+  // browser UI language (exact, then base language, then 'en').
+  const WHATS_NEW = {
+    '2.6.0': {
+      'en': 'Drag the launcher handle up or down to move it wherever suits you.',
+      'zh-TW': '啟動把手可以上下拖曳,移到你順手的位置。',
+      'zh': '启动把手可以上下拖动,移到你顺手的位置。'
+    }
+  };
+
+  const FEEDBACK_LABEL = {
+    'en': 'Got feedback? Tell me',
+    'zh-TW': '有任何建議?告訴我',
+    'zh': '有任何建议?告诉我'
+  };
+
+  const WHATS_NEW_SEEN_KEY = 'tangent-whatsnew-seen';
+  let whatsNewPending = false;
+
+  function currentVersion() {
+    try { return chrome.runtime.getManifest().version; } catch (e) { return ''; }
+  }
+
+  // Pick the entry matching the browser UI language: exact (zh-TW), then base
+  // language (zh), then English, then whatever exists.
+  function pickLocale(map) {
+    let lang = 'en';
+    try { lang = chrome.i18n.getUILanguage() || navigator.language || 'en'; }
+    catch (e) { lang = navigator.language || 'en'; }
+    if (map[lang]) return map[lang];
+    const base = lang.split('-')[0];
+    const hit = Object.keys(map).find(k => k.split('-')[0] === base);
+    return map[hit] || map['en'] || Object.values(map)[0];
+  }
+
+  // Decide at startup whether an update banner is due. A brand-new install
+  // (no stored version) is seeded silently so first-time users see nothing.
+  function initWhatsNew() {
+    const current = currentVersion();
+    let seen = null;
+    try { seen = localStorage.getItem(WHATS_NEW_SEEN_KEY); } catch (e) { /* ignore */ }
+
+    if (seen === null) {
+      try { localStorage.setItem(WHATS_NEW_SEEN_KEY, current); } catch (e) { /* ignore */ }
+      return;
+    }
+    if (seen === current) return;
+
+    if (WHATS_NEW[current]) {
+      whatsNewPending = true; // shown when the panel next opens
+    } else {
+      // Updated, but nothing to announce for this version — catch up silently.
+      try { localStorage.setItem(WHATS_NEW_SEEN_KEY, current); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function markWhatsNewSeen() {
+    whatsNewPending = false;
+    try { localStorage.setItem(WHATS_NEW_SEEN_KEY, currentVersion()); } catch (e) { /* ignore */ }
+  }
+
+  function maybeInjectWhatsNew(panel) {
+    if (!whatsNewPending) return;
+    const notes = WHATS_NEW[currentVersion()];
+    if (!notes) return;
+
+    const bar = document.createElement('div');
+    bar.className = 'thread-whatsnew';
+    bar.innerHTML = `
+      <button class="thread-whatsnew-close" title="Dismiss">✕</button>
+      <span class="thread-whatsnew-badge"></span>
+      <div class="thread-whatsnew-body">
+        <span class="thread-whatsnew-text"></span><a class="thread-whatsnew-link" target="_blank" rel="noopener noreferrer"></a>
+      </div>
+    `;
+    // textContent (not innerHTML) so note text can never inject markup.
+    bar.querySelector('.thread-whatsnew-badge').textContent = NEW_BADGE;
+    bar.querySelector('.thread-whatsnew-text').textContent = pickLocale(notes);
+    const link = bar.querySelector('.thread-whatsnew-link');
+    link.textContent = pickLocale(FEEDBACK_LABEL);
+    link.href = FEEDBACK_FORM_URL;
+
+    bar.querySelector('.thread-whatsnew-close').addEventListener('click', () => {
+      markWhatsNewSeen();
+      bar.remove();
+    });
+    link.addEventListener('click', markWhatsNewSeen);
+
+    panel.querySelector('.thread-panel-header').insertAdjacentElement('afterend', bar);
+  }
+
+  // ============================================
   // INITIALIZATION
   // ============================================
   function init() {
@@ -1044,6 +1149,7 @@
     currentConvKey = getConvKey();
     loadBindings();
     loadDefaultMode();
+    initWhatsNew();
 
     setupSelectionButton();
     createEdgeHandle();
