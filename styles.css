@@ -111,6 +111,12 @@ html.tangent-side-open #tangent-edge-handle {
   box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
 }
 
+/* Unread reply waiting in the (minimized) side chat: dot turns red */
+#tangent-edge-handle.has-unread::after {
+  background: #ef4444;
+  box-shadow: 0 0 5px rgba(239, 68, 68, 0.9);
+}
+
 /* ============================================
    DOCKED SIDE PANEL
    ============================================ */

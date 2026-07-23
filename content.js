@@ -360,9 +360,51 @@
 
   function updateEdgeHandle() {
     if (!edgeHandle) return;
-    const hasThread = sessionPanels.has(currentConvKey) || !!bindings[currentConvKey];
+    const data = sessionPanels.get(currentConvKey);
+    const hasThread = !!data || !!bindings[currentConvKey];
     edgeHandle.classList.toggle('has-thread', hasThread);
+    edgeHandle.classList.toggle('has-unread', !!(data && data.unread));
     edgeHandle.title = hasThread ? 'Reopen Side Chat' : 'Open Side Chat';
+  }
+
+  // ============================================
+  // UNREAD DETECTION (red dot on the edge handle)
+  // ============================================
+  // While a side chat is minimized the user can't post in it, so any new
+  // message turn that appears is an incoming reply — mark it unread. Viewing
+  // the panel (expand) clears it. Works for both temporary and saved chats.
+  // Snapshot of the side chat's content: turn count + total message text
+  // length. A reply that was already streaming when the user minimized adds
+  // no new turn — only its text grows — so both must be tracked.
+  function panelChatSignature(data) {
+    const iframe = data.element.querySelector('.thread-iframe');
+    let doc;
+    try { doc = iframe.contentDocument; } catch (e) { return null; } // cross-origin mid-load
+    if (!doc) return null;
+    // ChatGPT tags each message with an author role; Claude tags each
+    // rendered turn with data-test-render-count.
+    let nodes = doc.querySelectorAll('[data-message-author-role]');
+    if (!nodes.length) nodes = doc.querySelectorAll('[data-test-render-count]');
+    if (!nodes.length) return null; // not loaded / selectors gone
+    let textLen = 0;
+    for (const n of nodes) textLen += n.textContent.length;
+    return { count: nodes.length, textLen };
+  }
+
+  function pollUnread() {
+    let changed = false;
+    for (const [, data] of sessionPanels) {
+      if (!data.minimized || data.unread) continue;
+      const sig = panelChatSignature(data);
+      if (!sig) continue;
+      if (!data.seenSig) { data.seenSig = sig; continue; } // baseline
+      // Small text threshold so cosmetic re-renders can't false-flag.
+      if (sig.count > data.seenSig.count || sig.textLen > data.seenSig.textLen + 5) {
+        data.unread = true;
+        changed = true;
+      }
+    }
+    if (changed) updateEdgeHandle();
   }
 
   // ============================================
@@ -539,6 +581,8 @@
     const data = {
       element: panel,
       minimized: false,
+      unread: false,
+      seenSig: null,
       originScrollTop: selectionScrollTop,
       originSelectedText: selectedText,
       originElements: [...selectionOriginElements]
@@ -647,6 +691,7 @@
 
     const wasMinimized = data.minimized;
     data.minimized = false;
+    data.unread = false; // viewing the panel marks it read
     data.element.classList.add('visible');
 
     updateDockState();
@@ -661,6 +706,9 @@
     if (!data) return;
 
     data.minimized = true;
+    // Baseline the content now; anything that grows after this marks unread.
+    data.seenSig = panelChatSignature(data);
+    data.unread = false;
     data.element.classList.remove('visible');
 
     updateDockState();
@@ -1047,6 +1095,11 @@
   // banner. Always provide 'en' as the fallback. Keys are matched against the
   // browser UI language (exact, then base language, then 'en').
   const WHATS_NEW = {
+    '2.7.0': {
+      'en': 'The side handle now shows a red dot when your side chat has a new reply.',
+      'zh-TW': '側邊把手現在會在側聊有新回覆時亮紅點。',
+      'zh': '侧边把手现在会在侧聊有新回复时亮红点。'
+    },
     '2.6.0': {
       'en': 'Drag the launcher handle up or down to move it wherever suits you.',
       'zh-TW': '啟動把手可以上下拖曳,移到你順手的位置。',
@@ -1138,6 +1191,18 @@
   // ============================================
   // INITIALIZATION
   // ============================================
+  // On extension reload/update the background worker re-injects this script
+  // into open tabs. The previous generation's isolated world is destroyed
+  // (its listeners and timers die with it) but the DOM it created survives —
+  // remove that dead UI before building fresh, or handles accumulate.
+  function removeStaleUI() {
+    document.querySelectorAll(
+      '#tangent-edge-handle, #tangent-side-chat-button, .claude-thread-panel'
+    ).forEach(el => el.remove());
+    document.documentElement.classList.remove('tangent-side-open');
+    document.documentElement.style.removeProperty('margin-right');
+  }
+
   function init() {
     // If we're inside an iframe (the side chat), handle iframe-specific features
     if (window.self !== window.top) {
@@ -1146,6 +1211,7 @@
       return;
     }
 
+    removeStaleUI();
     currentConvKey = getConvKey();
     loadBindings();
     loadDefaultMode();
@@ -1156,6 +1222,7 @@
     updateEdgeHandle();
     watchConversation();
     watchSideConversationUrl();
+    setInterval(pollUnread, 1500);
 
     document.addEventListener('keydown', handleKeydown);
 
