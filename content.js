@@ -76,6 +76,23 @@
     return m ? m[1] : 'new';
   }
 
+  // If the main conversation lives inside a project, return the URL where a
+  // new chat in that project starts (so a saved side chat lands in the same
+  // project instead of the global history). Null when not in a project.
+  function getProjectNewChatUrl() {
+    if (PLATFORM === 'chatgpt') {
+      // Projects are in the URL: /g/g-p-<hexid>[-slug]/... ; the hex id stops
+      // at the slug's dash. /g/g-p-<hexid>/project is the new-chat page.
+      const m = location.pathname.match(/\/g\/(g-p-[0-9a-f]+)/);
+      return m ? `https://chatgpt.com/g/${m[1]}/project` : null;
+    }
+    // Claude: the conversation URL is a bare /chat/<id>; project membership
+    // only surfaces as a project link (breadcrumb) in the page DOM.
+    const a = document.querySelector('a[href*="/project/"]');
+    const m = a && a.getAttribute('href').match(/\/project\/([0-9a-f-]{36})/);
+    return m ? `https://claude.ai/project/${m[1]}` : null;
+  }
+
   // Bindings live in the site origin's localStorage — no extension
   // permission needed, and they are naturally scoped per platform.
   const BINDINGS_KEY = 'tangent-side-chat-bindings';
@@ -668,9 +685,9 @@
     // which the top page is but a freshly-loaded iframe is not.
     let src;
     if (defaultMode === 'normal') {
-      src = PLATFORM === 'claude'
-        ? 'https://claude.ai/new'
-        : 'https://chatgpt.com/';
+      // Saved chats follow the project the main conversation lives in.
+      src = getProjectNewChatUrl()
+        || (PLATFORM === 'claude' ? 'https://claude.ai/new' : 'https://chatgpt.com/');
     } else {
       src = PLATFORM === 'claude'
         ? 'https://claude.ai/new?incognito=true'
@@ -1095,6 +1112,11 @@
   // banner. Always provide 'en' as the fallback. Keys are matched against the
   // browser UI language (exact, then base language, then 'en').
   const WHATS_NEW = {
+    '2.8.0': {
+      'en': 'Saved side chats now stay inside the ChatGPT / Claude project you are working in.',
+      'zh-TW': '儲存的側聊現在會存進你所在的 ChatGPT / Claude 專案裡,不再散落在一般紀錄。',
+      'zh': '保存的侧聊现在会存进你所在的 ChatGPT / Claude 项目里,不再散落在一般记录。'
+    },
     '2.7.0': {
       'en': 'The side handle now shows a red dot when your side chat has a new reply.',
       'zh-TW': '側邊把手現在會在側聊有新回覆時亮紅點。',
