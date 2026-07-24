@@ -69,11 +69,22 @@
   function getConvKey() {
     // Not anchored: ChatGPT project/GPT conversations live under
     // /g/<project>/c/<id>, Claude project chats under /project/.../chat/<id>.
+    // Capture the whole path segment — ChatGPT's provisional ids contain a
+    // colon ("WEB:<uuid>"), which a [\w-]+ class would silently truncate to
+    // "WEB", colliding across conversations.
     const path = location.pathname;
     const m = PLATFORM === 'claude'
-      ? path.match(/\/chat\/([\w-]+)/)
-      : path.match(/\/c\/([\w-]+)/);
+      ? path.match(/\/chat\/([^/?#]+)/)
+      : path.match(/\/c\/([^/?#]+)/);
     return m ? m[1] : 'new';
+  }
+
+  // Keys that don't identify a conversation yet: a chat with no id at all, and
+  // ChatGPT's optimistic "WEB:<uuid>" id shown before the final one arrives.
+  // A side chat opened against one of these must follow the conversation to
+  // whatever key it settles on rather than be treated as a different chat.
+  function isProvisionalKey(key) {
+    return key === 'new' || /^WEB:/.test(key);
   }
 
   // If the main conversation lives inside a project, return the URL where a
@@ -112,7 +123,7 @@
   }
 
   function saveBinding(convKey, url) {
-    if (convKey === 'new') return; // no stable identity to bind to
+    if (isProvisionalKey(convKey)) return; // no stable identity to bind to
     bindings[convKey] = url;
     persistBindings();
     console.log('SideChat: binding saved for', convKey, '->', url);
@@ -474,8 +485,8 @@
     if (!btn) return;
     const kept = !!bindings[convKey] || panelElement.dataset.temporary === 'false';
     btn.title = kept
-      ? 'Detach side chat (kept as a normal conversation)'
-      : 'Discard thread (temporary — not saved)';
+      ? 'Detach Side Chat (kept as a normal conversation)'
+      : 'Discard Side Chat (temporary — not saved)';
     btn.innerHTML = kept ? UNLINK_ICON_SVG : TRASH_ICON_SVG;
   }
 
@@ -519,19 +530,19 @@
             <span class="mode-track"><span class="mode-knob"></span></span>
             <span class="mode-label mode-label-norm">Saved</span>
           </button>
-          <button class="thread-panel-btn thread-panel-minimize" title="Minimize thread">
+          <button class="thread-panel-btn thread-panel-minimize" title="Minimize Side Chat">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
           </button>
-          <button class="thread-panel-btn thread-panel-close" title="Discard thread"></button>
+          <button class="thread-panel-btn thread-panel-close" title="Discard Side Chat"></button>
         </div>
       </div>
       <div class="thread-panel-body">
         <iframe class="thread-iframe" src="about:blank"></iframe>
         <div class="thread-panel-loading">
           <div class="loading-spinner"></div>
-          <span>Loading thread...</span>
+          <span>Loading Side Chat...</span>
         </div>
         <div class="thread-panel-error" style="display: none;">
           <p>Unable to load the side chat in an iframe.</p>
@@ -542,18 +553,23 @@
       <div class="thread-panel-resize-handle"></div>
     `;
 
-    panel.querySelector('.thread-panel-close').addEventListener('click', () => discardPanel(convKey));
+    // Read the key from the panel at click time, never from this closure: a
+    // chat that starts as 'new' is re-keyed to its real id once the main
+    // conversation gets one, and dataset.convKey is what follows that move.
+    panel.querySelector('.thread-panel-close')
+      .addEventListener('click', () => discardPanel(panel.dataset.convKey));
     updateDiscardButton(panel, convKey);
 
     panel.querySelector('.thread-mode-toggle').addEventListener('click', () => {
       setDefaultMode(defaultMode === 'temporary' ? 'normal' : 'temporary');
     });
     syncModeToggle(panel);
-    panel.querySelector('.thread-panel-minimize').addEventListener('click', () => minimizePanel(convKey));
+    panel.querySelector('.thread-panel-minimize')
+      .addEventListener('click', () => minimizePanel(panel.dataset.convKey));
     panel.querySelector('.thread-open-tab').addEventListener('click', () => {
       const fallbackUrl = PLATFORM === 'claude' ? 'https://claude.ai/new' : 'https://chatgpt.com/';
       window.open(fallbackUrl, '_blank');
-      discardPanel(convKey);
+      discardPanel(panel.dataset.convKey);
     });
 
     makeResizable(panel, panel.querySelector('.thread-panel-resize-handle'));
@@ -813,11 +829,12 @@
     const oldKey = currentConvKey;
     const oldData = sessionPanels.get(oldKey);
 
-    // A fresh chat gains its real id after the first message; carry the
-    // side chat over instead of treating it as a different conversation.
-    if (oldKey === 'new' && newKey !== 'new' &&
+    // A fresh chat gains its real id after the first message — sometimes via
+    // an intermediate provisional id — so carry the side chat forward on every
+    // hop out of a provisional key instead of treating it as a different chat.
+    if (isProvisionalKey(oldKey) && oldKey !== newKey &&
         oldData && !sessionPanels.has(newKey)) {
-      sessionPanels.delete('new');
+      sessionPanels.delete(oldKey);
       sessionPanels.set(newKey, oldData);
       oldData.element.dataset.convKey = newKey;
       currentConvKey = newKey;
@@ -853,7 +870,7 @@
   function watchSideConversationUrl() {
     setInterval(() => {
       for (const [convKey, data] of sessionPanels) {
-        if (convKey === 'new') continue;
+        if (isProvisionalKey(convKey)) continue;
         let href = null;
         try { href = data.element.querySelector('.thread-iframe').contentWindow.location.href; } catch (e) { continue; }
         if (!href) continue;
@@ -1112,7 +1129,7 @@
   // banner. Always provide 'en' as the fallback. Keys are matched against the
   // browser UI language (exact, then base language, then 'en').
   const WHATS_NEW = {
-    '2.8.0': {
+    '2.8.1': {
       'en': 'Saved side chats now stay inside the ChatGPT / Claude project you are working in.',
       'zh-TW': '儲存的側聊現在會存進你所在的 ChatGPT / Claude 專案裡,不再散落在一般紀錄。',
       'zh': '保存的侧聊现在会存进你所在的 ChatGPT / Claude 项目里,不再散落在一般记录。'
